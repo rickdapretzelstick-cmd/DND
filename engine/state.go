@@ -83,6 +83,10 @@ type Monster struct {
 	Sprite     SpriteSpec     `json:"sprite"`
 	DomainUsed bool           `json:"domainUsed"`
 	Power      int            `json:"power,omitempty"`
+	Next       string         `json:"next,omitempty"`     // telegraphed move name
+	NextKind   string         `json:"nextKind,omitempty"` // attack, save, status...
+	NextAoE    bool           `json:"nextAoe,omitempty"`
+	nextIdx    int
 }
 
 type Combatant struct {
@@ -143,6 +147,19 @@ type Combat struct {
 	RoamerID    string       `json:"roamerId,omitempty"`
 	QuestID     string       `json:"questId,omitempty"`
 	Title       string       `json:"title"`
+	Flow        int          `json:"flow"`
+	FlowMax     int          `json:"flowMax"`
+}
+
+// BattleResult is the last finished fight, for the client's results screen.
+type BattleResult struct {
+	Seq     int      `json:"seq"`
+	Title   string   `json:"title"`
+	Outcome string   `json:"outcome"`
+	XP      int      `json:"xp"`
+	Yen     int      `json:"yen"`
+	Slain   []string `json:"slain"`
+	Rounds  int      `json:"rounds"`
 }
 
 type LogEntry struct {
@@ -232,6 +249,7 @@ type Campaign struct {
 	NextLogID  int                   `json:"nextLogId"`
 	NextID     int                   `json:"nextId"`
 	Combat     *Combat               `json:"combat"`
+	LastBattle *BattleResult         `json:"lastBattle"`
 	Location   string                `json:"location"`
 	SceneDesc  string                `json:"sceneDesc"`
 	Quest      string                `json:"quest"`

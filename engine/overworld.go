@@ -464,3 +464,16 @@ func (e *Engine) safeSpot(x, y float64) (float64, float64) {
 func (e *Engine) hubSpawn() (float64, float64) {
 	return float64(e.W.SpawnX) + 0.5, float64(e.W.SpawnY) + 0.5
 }
+
+// DebugBattle starts a test fight for the caller (enabled by DND_DEBUG in server.go).
+func (e *Engine) DebugBattle(token, biome string, spawns []Spawn) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, ch, err := e.charOf(token)
+	if err != nil {
+		return err
+	}
+	_, err = e.StartBattle(BattleOpts{Spawns: spawns, Party: []*Character{ch}, X: ch.X, Y: ch.Y, Biome: biome, Title: "Test Exorcism"})
+	e.changed()
+	return err
+}

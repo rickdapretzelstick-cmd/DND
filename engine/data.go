@@ -109,6 +109,9 @@ func init() {
 	addAbility(Ability{ID: "rct", Name: "Reverse Cursed Technique", Universal: true, MinLevel: 6, Cost: 5, Desc: "Multiply negative energy by itself to heal: 3d8 + level HP.",
 		Effects: []Effect{{Kind: "heal", Target: "self", Dice: "3d8", Scale: "1d8", AddMod: true}}, VFX: "rct", Color: "#c7f9cc"})
 
+	addAbility(Ability{ID: "overdrive", Name: "Cursed Overdrive", Universal: true, Desc: "Spend a full Flow meter: unleash everything on every curse. 3d8 (+2d8 per tier) + modifier to all enemies, can Black Flash.",
+		Effects: []Effect{{Kind: "attack", Target: "all_enemies", Dice: "3d8", Scale: "2d8", AddMod: true, Melee: true}}, VFX: "blackflash", Color: "#ff2e63"})
+
 	t := func(tc Technique, moves []Ability, domain Ability) {
 		for _, m := range moves {
 			m.Tech = tc.ID

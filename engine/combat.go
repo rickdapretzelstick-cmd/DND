@@ -194,6 +194,24 @@ func (e *Engine) fx(f FX) {
 	if cb == nil {
 		return
 	}
+	if f.Kind == "move" || f.Kind == "blackflash" {
+		for _, h := range f.Hits {
+			if h.Miss {
+				if e.fighterByID(h.ID).party() { // a dodge feeds the meter too
+					cb.Flow = min(cb.FlowMax, cb.Flow+1)
+				}
+				continue
+			}
+			if h.Dmg <= 0 {
+				continue
+			}
+			g := 1
+			if h.Crit || h.BF {
+				g = 2
+			}
+			cb.Flow = min(cb.FlowMax, cb.Flow+g)
+		}
+	}
 	cb.FXSeq++
 	f.ID = cb.FXSeq
 	cb.FX = append(cb.FX, f)
@@ -238,7 +256,35 @@ func (e *Engine) spawnMonster(sp Spawn, n, of int) (*Monster, error) {
 		m.Name = fmt.Sprintf("%s %c", m.Name, 'A'+rune(n-1))
 	}
 	m.HP = m.MaxHP
+	e.planMove(m)
 	return m, nil
+}
+
+// planMove picks the monster's next move ahead of time so the party can see it coming.
+func (e *Engine) planMove(m *Monster) {
+	t := Bestiary[m.Template]
+	total := 0
+	for _, mv := range t.Moves {
+		total += mv.Weight
+	}
+	if total == 0 {
+		return
+	}
+	roll := rand.IntN(total)
+	m.nextIdx = 0
+	for i, x := range t.Moves {
+		if roll < x.Weight {
+			m.nextIdx = i
+			break
+		}
+		roll -= x.Weight
+	}
+	mv := t.Moves[m.nextIdx]
+	m.Next, m.NextKind, m.NextAoE = mv.Name, "attack", false
+	if len(mv.Effects) > 0 {
+		m.NextKind = mv.Effects[0].Kind
+		m.NextAoE = mv.Effects[0].Target == "all_enemies"
+	}
 }
 
 type BattleOpts struct {
@@ -266,7 +312,7 @@ func (e *Engine) StartBattle(o BattleOpts) (string, error) {
 	if len(party) == 0 {
 		return "", fmt.Errorf("no sorcerer can fight")
 	}
-	cb := &Combat{Round: 1, Biome: o.Biome, X: o.X, Y: o.Y, RoamerID: o.RoamerID, QuestID: o.QuestID, Title: o.Title}
+	cb := &Combat{FlowMax: 8, Round: 1, Biome: o.Biome, X: o.X, Y: o.Y, RoamerID: o.RoamerID, QuestID: o.QuestID, Title: o.Title}
 	e.C.Combat = cb
 	var lines []string
 	for _, ch := range party {
@@ -526,22 +572,10 @@ func (e *Engine) monsterTurn(m *Monster) {
 		e.applyAbility(self, AbilityList[m.Domain], "", false)
 		return
 	}
-	total := 0
-	for _, mv := range t.Moves {
-		total += mv.Weight
-	}
-	if total == 0 {
+	if len(t.Moves) == 0 {
 		return
 	}
-	roll := rand.IntN(total)
-	mv := t.Moves[0]
-	for _, x := range t.Moves {
-		if roll < x.Weight {
-			mv = x
-			break
-		}
-		roll -= x.Weight
-	}
+	mv := t.Moves[min(m.nextIdx, len(t.Moves)-1)]
 	targets := e.side(true)
 	if len(targets) == 0 {
 		return
@@ -553,6 +587,7 @@ func (e *Engine) monsterTurn(m *Monster) {
 	}
 	ab := Ability{ID: "curse_" + m.Template, Name: mv.Name, Effects: mv.Effects, VFX: mv.VFX, Color: mv.Color}
 	e.applyAbility(self, ab, target.id(), false)
+	e.planMove(m)
 }
 
 // checkCombatEnd ends the fight if one side is out. Returns true if it ended.
@@ -594,6 +629,20 @@ func (e *Engine) endCombat(outcome string) {
 	}
 	party := e.battleChars()
 	e.C.Combat = nil
+	var lastXP, lastYen int
+	defer func() {
+		seq := 1
+		if e.C.LastBattle != nil {
+			seq = e.C.LastBattle.Seq + 1
+		}
+		e.C.LastBattle = &BattleResult{Seq: seq, Title: cb.Title, Outcome: outcome, Rounds: cb.Round}
+		for _, m := range cb.Monsters {
+			if m.HP <= 0 {
+				e.C.LastBattle.Slain = append(e.C.LastBattle.Slain, m.Name)
+			}
+		}
+		e.C.LastBattle.XP, e.C.LastBattle.Yen = lastXP, lastYen
+	}()
 	xp, yen := 0, 0
 	var slain []string
 	for _, m := range cb.Monsters {
@@ -639,6 +688,7 @@ func (e *Engine) endCombat(outcome string) {
 		e.splitYen(party, yen, "exorcism fee from Jujutsu HQ")
 	}
 	e.afterBattle(cb, outcome, party)
+	lastXP, lastYen = xp, yen
 	summary += fmt.Sprintf(" XP: %d. Yen: %d.", xp, yen)
 	kind := "combat_end"
 	if outcome == "defeat" {
@@ -811,6 +861,13 @@ func (e *Engine) combatAction(ch *Character, r CombatReq) error {
 }
 
 func (e *Engine) payFor(ch *Character, ab Ability) error {
+	if ab.ID == "overdrive" {
+		if cb := e.C.Combat; cb.Flow < cb.FlowMax {
+			return fmt.Errorf("the Flow meter isn't full (%d/%d)", cb.Flow, cb.FlowMax)
+		}
+		e.C.Combat.Flow = 0
+		return nil
+	}
 	if ab.Tech != "" && ch.Status["burnout"] > 0 && !ab.Universal {
 		return fmt.Errorf("your technique is burnt out — use universal moves this turn")
 	}

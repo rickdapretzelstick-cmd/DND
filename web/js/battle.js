@@ -113,19 +113,19 @@ export class BattleView {
     const party = cb.order.filter((o) => !o.isMonster);
     const mons = cb.monsters;
     const L = {};
-    const pScale = Math.max(3, Math.floor(H / 170));
+    const pScale = Math.max(4, Math.floor(H / 135));
     party.forEach((o, i) => {
       const n = party.length;
-      const y = H * 0.36 + (n > 1 ? (i / (n - 1)) * H * 0.3 : H * 0.14);
-      const x = W * 0.2 + (i % 2) * W * 0.07;
+      const y = H * (n > 1 ? 0.47 + (i / (n - 1)) * 0.13 : 0.54);
+      const x = W * 0.25 + (i % 2) * W * 0.05;
       L[o.id] = { x, y, scale: pScale, party: true };
     });
     mons.forEach((m, i) => {
       const n = mons.length;
-      const y = H * 0.36 + (n > 1 ? (i / (n - 1)) * H * 0.3 : H * 0.14);
-      const x = W * 0.76 - (i % 2) * W * 0.08 - (n > 5 ? ((i % 3) * W * 0.04) : 0);
+      const y = H * (n > 1 ? 0.45 + (i / (n - 1)) * 0.16 : 0.54);
+      const x = W * 0.72 + (i % 2 ? W * 0.06 : -W * 0.03) - (n > 5 ? (i % 3) * W * 0.03 : 0);
       const size = m.sprite.size || 1;
-      const scale = Math.max(2, Math.floor((H * (0.1 + size * 0.05)) / (16 + size * 12)));
+      const scale = Math.max(3, Math.floor((H * (0.14 + size * 0.06)) / (16 + size * 12)));
       L[m.id] = { x, y, scale, party: false };
     });
     this.layout = L;
@@ -192,6 +192,11 @@ export class BattleView {
         this.banner = { text: "BLACK FLASH", sub: "", color: "#ff1f3d", t0: performance.now(), dur: 1300, bf: true };
         this.shake = 22;
       }, impactDelay - 40);
+    }
+    if (f.vfx === "blackflash" && f.kind === "move" && /overdrive/i.test(f.name || "")) {
+      this.banner = { text: "CURSED OVERDRIVE", sub: "", color: "#ffd166", t0: now, dur: 1400, bf: true };
+      this.flash = { color: "#ff2e63", t0: now, dur: 500 };
+      this.shake = 20;
     }
     if (f.name && f.kind !== "status") this.caption = { text: f.name, t0: now, color, who: f.src };
   }
@@ -268,6 +273,8 @@ export class BattleView {
     }
     if (h.dmg) {
       a.hit = now;
+      this.punch = { t0: now, x: t.x, y: ty, k: bf ? 0.16 : h.crit ? 0.1 : 0.05 };
+      this.beams.push({ type: "burst", x: t.x, y: ty, color: bf ? "#ff1f3d" : "#ffffff", t0: now, dur: 260, r: bf ? 220 : 90 + h.dmg });
       this.shake = Math.max(this.shake, Math.min(14, 3 + h.dmg / 6));
       const size = bf ? 46 : h.crit ? 34 : 24 + Math.min(14, h.dmg / 5);
       this.texts.push(txt(t.x + (Math.random() - 0.5) * 30, ty - 30, String(h.dmg), bf ? "#ff1f3d" : h.crit ? "#ffd166" : "#ffffff", size, now, bf));
@@ -288,12 +295,21 @@ export class BattleView {
     this.computeLayout(W, H);
     this.step(now, W, H);
     ctx.save();
+    if (this.punch) {
+      const pt = (now - this.punch.t0) / 420;
+      if (pt >= 1) this.punch = null;
+      else {
+        const z = 1 + this.punch.k * Math.sin(pt * Math.PI);
+        ctx.translate(this.punch.x, this.punch.y); ctx.scale(z, z); ctx.translate(-this.punch.x, -this.punch.y);
+      }
+    }
     if (this.shake > 0.2) {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
       this.shake *= 0.88;
     }
     if (cb.domain) drawBackground(ctx, W, H, DOMAINS[cb.domain.vfx] || DOMAINS.domain_void, now, true);
     else drawBackground(ctx, W, H, BIOMES[cb.biome] || BIOMES.field, now, false, opts.clock);
+    finishBackground(ctx, W, H, cb.domain ? DOMAINS[cb.domain.vfx] || DOMAINS.domain_void : BIOMES[cb.biome] || BIOMES.field, now, !!cb.domain, opts.clock);
 
     // Actors
     const L = this.layout;
@@ -367,21 +383,40 @@ export class BattleView {
         this.statusIcons(ctx, m.status, p.x, p.y + 8);
         if (m.hp <= 0) continue;
       }
-      // HP bar + name
-      const bw = Math.max(70, w * 0.9);
-      const by = p.y - h - 16;
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(p.x - bw / 2 - 2, by - 14, bw + 4, 22);
-      ctx.fillStyle = "#330000";
-      ctx.fillRect(p.x - bw / 2, by + 2, bw, 5);
+      // HP bar + name (+ telegraphed move)
+      const bw = Math.max(96, w * 0.9);
+      const by = p.y - h - 22;
+      const nm = name.length > 22 ? name.slice(0, 21) + "…" : name;
+      ctx.font = "800 12px system-ui, sans-serif";
+      const nw = ctx.measureText(nm).width;
+      const bx = p.x - bw / 2;
+      ctx.fillStyle = "rgba(8,6,16,0.82)";
+      ctx.beginPath(); ctx.moveTo(bx - 4, by - 17); ctx.lineTo(bx + Math.max(bw, nw + 18) + 4, by - 17); ctx.lineTo(bx + Math.max(bw, nw + 18) - 4, by + 11); ctx.lineTo(bx - 4, by + 11); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = isCur ? "#ffd166" : p.party ? "#7dd3fc" : "#fb7185";
+      ctx.fillRect(bx - 4, by - 17, 3, 28);
+      ctx.fillStyle = "#2a0a10";
+      ctx.beginPath(); ctx.moveTo(bx + 3, by + 1); ctx.lineTo(bx + bw, by + 1); ctx.lineTo(bx + bw - 4, by + 8); ctx.lineTo(bx, by + 8); ctx.closePath(); ctx.fill();
       const frac = Math.max(0, hp / max);
       ctx.fillStyle = frac > 0.5 ? "#52b788" : frac > 0.25 ? "#e9c46a" : "#e63946";
-      ctx.fillRect(p.x - bw / 2, by + 2, bw * frac, 5);
-      ctx.font = "bold 11px system-ui, sans-serif";
-      ctx.textAlign = "center";
+      ctx.beginPath(); ctx.moveTo(bx + 3, by + 1); ctx.lineTo(bx + 3 + (bw - 3) * frac, by + 1); ctx.lineTo(bx + (bw - 4) * frac, by + 8); ctx.lineTo(bx, by + 8); ctx.closePath(); ctx.fill();
       ctx.fillStyle = isCur ? "#ffd166" : "#fff";
-      ctx.fillText(name.length > 22 ? name.slice(0, 21) + "…" : name, p.x, by - 2);
-      ctx.textAlign = "left";
+      ctx.fillText(nm, bx + 3, by - 5);
+      ctx.font = "700 9px system-ui, sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.fillText(`${Math.max(0, hp)}/${max}`, bx + bw - 3 - ctx.measureText(`${Math.max(0, hp)}/${max}`).width, by - 6);
+      if (!p.party) {
+        const m = cb.monsters.find((x) => x.id === id);
+        if (m && m.next && m.hp > 0) {
+          const pulse = 0.65 + 0.35 * Math.sin(now / 180);
+          const label = "⚠ " + m.next + (m.nextAoe ? " (ALL)" : "");
+          ctx.font = "800 11px system-ui, sans-serif";
+          const lw = ctx.measureText(label).width + 14;
+          ctx.fillStyle = `rgba(120,10,30,${0.75 * pulse + 0.2})`;
+          ctx.fillRect(p.x - lw / 2, by - 40, lw, 18);
+          ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = 1; ctx.strokeRect(p.x - lw / 2 + 0.5, by - 39.5, lw - 1, 17);
+          ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.fillText(label, p.x, by - 27); ctx.textAlign = "left";
+        }
+      }
     }
 
     // Effects
@@ -457,6 +492,18 @@ export class BattleView {
             ctx.fillStyle = g;
             ctx.beginPath(); ctx.arc(x, y, b.r * 2, 0, Math.PI * 2); ctx.fill();
           }
+          break;
+        }
+        case "burst": {
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = hexA(b.color, 0.9 * (1 - t));
+          ctx.lineWidth = 3;
+          for (let i = 0; i < 14; i++) {
+            const a = (i / 14) * Math.PI * 2 + (i % 2) * 0.12, r0 = b.r * (0.15 + t * 0.55), r1 = b.r * (0.3 + t * 0.9);
+            ctx.beginPath(); ctx.moveTo(b.x + Math.cos(a) * r0, b.y + Math.sin(a) * r0); ctx.lineTo(b.x + Math.cos(a) * r1, b.y + Math.sin(a) * r1); ctx.stroke();
+          }
+          ctx.fillStyle = hexA("#ffffff", 0.7 * (1 - t) * (1 - t));
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.3 * (1 - t) + 4, 0, Math.PI * 2); ctx.fill();
           break;
         }
         case "pillar": {
@@ -758,6 +805,66 @@ function drawBackground(ctx, W, H, bg, now, domain, clock = 12) {
     v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,0.6)");
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
   }
+}
+
+// Depth pass over any backdrop: perspective floor, light, drifting motes, foreground framing, vignette.
+function finishBackground(ctx, W, H, bg, now, domain, clock = 12) {
+  const horizon = H * 0.55;
+  const night = !domain && (clock >= 19 || clock < 5);
+  // perspective floor lines
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, horizon, W, H - horizon); ctx.clip();
+  ctx.strokeStyle = "rgba(0,0,0,0.13)"; ctx.lineWidth = 2;
+  for (let i = -12; i <= 12; i++) {
+    ctx.beginPath(); ctx.moveTo(W / 2 + i * 26, horizon); ctx.lineTo(W / 2 + i * 150, H); ctx.stroke();
+  }
+  for (let k = 1; k < 7; k++) {
+    const y = horizon + (H - horizon) * Math.pow(k / 7, 1.8);
+    ctx.strokeStyle = `rgba(0,0,0,${0.05 + k * 0.012})`; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  // soft light pool where the fighters stand
+  const pool = ctx.createRadialGradient(W * 0.5, H * 0.66, 10, W * 0.5, H * 0.66, W * 0.5);
+  pool.addColorStop(0, night ? "rgba(120,140,255,0.16)" : "rgba(255,244,200,0.22)"); pool.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = pool; ctx.fillRect(0, horizon, W, H - horizon);
+  ctx.restore();
+  // horizon haze
+  const hz = ctx.createLinearGradient(0, horizon - H * 0.1, 0, horizon + H * 0.04);
+  hz.addColorStop(0, "rgba(255,255,255,0)"); hz.addColorStop(0.7, night ? "rgba(90,110,200,0.16)" : "rgba(255,255,255,0.22)"); hz.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = hz; ctx.fillRect(0, horizon - H * 0.1, W, H * 0.14);
+  // god rays
+  if (!domain) {
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 5; i++) {
+      const x0 = W * (0.1 + i * 0.2) + Math.sin(now / 3000 + i) * 20;
+      const g = ctx.createLinearGradient(x0, 0, x0 + 120, horizon);
+      g.addColorStop(0, night ? "rgba(140,160,255,0.08)" : "rgba(255,240,190,0.13)"); g.addColorStop(1, "rgba(255,240,190,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + 46, 0); ctx.lineTo(x0 + 220, horizon); ctx.lineTo(x0 + 120, horizon); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // drifting motes
+  const motifs = { fog: "#c77dff", factory: "#ffb347", tunnel: "#9aa0a6", graves: "#cfd8dc", torii: "#ffc4d6", trees: "#d8f3a0", hills: "#fff6c8" };
+  const mc = domain ? "#ffffff" : motifs[bg.motif] || "#ffffff";
+  ctx.fillStyle = mc;
+  for (let i = 0; i < 34; i++) {
+    const x = (hash(i, 1, 21) * W + now * (0.012 + hash(i, 2, 21) * 0.02)) % W, y = (hash(i, 3, 21) * H + Math.sin(now / 900 + i) * 8 + now * -0.01 * hash(i, 4, 21)) % H;
+    ctx.globalAlpha = 0.25 + 0.4 * Math.abs(Math.sin(now / 700 + i));
+    ctx.fillRect(Math.round(x), Math.round((y + H) % H), 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  // foreground framing blades / silhouettes
+  if (!domain) {
+    ctx.fillStyle = shade(bg.floor, -0.55);
+    for (let i = 0; i < 46; i++) {
+      const x = (i / 46) * W + hash(i, 5, 22) * 14, h0 = 14 + hash(i, 6, 22) * 30 + (i % 7 === 0 ? 24 : 0), sway = Math.sin(now / 600 + i) * 3;
+      ctx.beginPath(); ctx.moveTo(x - 5, H); ctx.lineTo(x + sway, H - h0); ctx.lineTo(x + 5, H); ctx.fill();
+    }
+  }
+  // vignette
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.hypot(W, H) * 0.62);
+  v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, domain ? "rgba(0,0,0,0.55)" : "rgba(5,4,16,0.5)");
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
 }
 
 function clouds(ctx, W, H, now, color = "rgba(255,255,255,0.8)") {

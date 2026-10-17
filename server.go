@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -117,6 +118,16 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 		_ = json.Unmarshal(b, &req)
 		return eng.UseAbilityOutOfCombat(t, req.Ability, req.Target)
 	})
+	if os.Getenv("DND_DEBUG") != "" {
+		s.mux.HandleFunc("/api/debug/battle", func(w http.ResponseWriter, r *http.Request) {
+			var req struct {
+				Biome  string
+				Spawns []engine.Spawn
+			}
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req)
+			reply(w, eng.DebugBattle(r.Header.Get("X-Token"), req.Biome, req.Spawns))
+		})
+	}
 	s.mux.HandleFunc("/api/world", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(eng.WorldJSON())

@@ -150,7 +150,7 @@ func (c *Character) AbilityCost(a Ability) int {
 // KnownAbilities lists every ability the character can use, in display order.
 func (c *Character) KnownAbilities() []Ability {
 	var out []Ability
-	for _, id := range []string{"strike", "guard", "binding_vow", "simple_domain", "rct"} {
+	for _, id := range []string{"strike", "guard", "binding_vow", "simple_domain", "rct", "overdrive"} {
 		a := AbilityList[id]
 		if c.Level >= a.MinLevel {
 			if id == "simple_domain" && c.Tech().NoCE {
@@ -498,7 +498,7 @@ func NewCharacter(id, owner, name, originID, techID string, base map[string]int,
 	c := &Character{ID: id, Owner: owner, Name: name, Race: originID, Class: techID, Level: 1, Stats: stats,
 		Gold: 5000 + Die(10)*1000, Skills: skills, Backstory: strings.TrimSpace(backstory), Look: look,
 		Status: map[string]int{}, Used: map[string]int{}}
-	c.MaxHP = max(1, tech.HitDie+c.Mod("CON"))
+	c.MaxHP = max(1, 2*(tech.HitDie+c.Mod("CON"))) // first fights should be survivable
 	if tech.NoCE {
 		c.MaxHP += 4
 	}

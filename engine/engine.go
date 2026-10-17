@@ -483,6 +483,7 @@ type Snapshot struct {
 	Characters []*Character      `json:"characters"`
 	Log        []LogEntry        `json:"log"`
 	Combat     *Combat           `json:"combat"`
+	LastBattle *BattleResult     `json:"lastBattle"`
 	Quests     []*Quest          `json:"quests"`
 	Choice     *Choice           `json:"choice"`
 	Rep        map[string]int    `json:"rep"`
@@ -508,7 +509,7 @@ func (e *Engine) SnapshotJSON() []byte {
 	defer e.mu.Unlock()
 	c := e.C
 	s := Snapshot{ID: c.ID, Name: c.Name, Setting: c.Setting, Mode: c.Mode, Started: c.Started, Seed: c.Seed, Location: c.Location,
-		Quest: c.Quest, Act: c.Act, Combat: c.Combat, Rep: c.Rep, Discovered: c.Discovered, Cleared: c.Cleared, Extra: c.ExtraNPCs,
+		Quest: c.Quest, Act: c.Act, Combat: c.Combat, LastBattle: c.LastBattle, Rep: c.Rep, Discovered: c.Discovered, Cleared: c.Cleared, Extra: c.ExtraNPCs,
 		Journal: c.Journal, DMBusy: e.DMBusy, AI: e.AIActive(), HasKey: e.APIKey() != "" || e.Cfg.Provider == "ollama", Model: e.modelLabel(), Effort: e.Cfg.Effort,
 		Players: []publicPlayer{}, Characters: []*Character{}, Log: []LogEntry{}, Quests: []*Quest{}, Gone: []string{}, Burned: []string{}}
 	for _, p := range c.Players {

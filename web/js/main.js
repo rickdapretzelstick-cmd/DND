@@ -244,6 +244,7 @@ function renderHUD() {
     : `<div class="muted">${S.started ? "No active quests. Look for ! and + markers over people's heads." : "Waiting for the host to begin the story…"}</div>`;
   // Battle UI
   renderBattleUI();
+  maybeShowResults();
   // Choice
   renderChoice();
   // Spectate banner
@@ -276,6 +277,27 @@ function knownAbilities(ch) {
 const abilityCost = (ch, a) => (ch.race === "gojo" && a.cost > 1 ? a.cost - 1 : a.cost) || 0;
 
 // ---------- battle UI ----------
+const curseThumbs = new Map();
+function curseThumb(m) {
+  let u = curseThumbs.get(m.template);
+  if (!u) { u = curseSprite(m.sprite, m.template, 0).toDataURL(); curseThumbs.set(m.template, u); }
+  return u;
+}
+
+function abilityBrief(a, mine) {
+  const out = [];
+  const tiersN = mine.level >= 12 ? 3 : mine.level >= 9 ? 2 : mine.level >= 5 ? 1 : 0;
+  for (const e of a.effects || []) {
+    const dice = e.dice === "weapon" ? "weapon" : [e.dice, ...Array(tiersN).fill(e.scale)].filter(Boolean).join("+");
+    if (e.kind === "attack" || e.kind === "save" || e.kind === "auto") out.push(`<i class="dmg">⚔ ${e.hits > 1 ? e.hits + "× " : ""}${esc(dice || "")}</i>`);
+    else if (e.kind === "heal") out.push(`<i class="heal">✚ ${esc(dice)}</i>`);
+    else if (e.kind === "status") out.push(`<i class="st">${esc(e.status)}</i>`);
+    if ((e.target || "").startsWith("all_")) out.push('<i class="aoe">ALL</i>');
+    if (e.melee) out.push('<i class="bf">⚡ BF</i>');
+  }
+  return [...new Set(out)].slice(0, 4).join("");
+}
+
 function renderBattleUI() {
   const ui = $("#battle-ui");
   const mine = myChar();
@@ -288,19 +310,33 @@ function renderBattleUI() {
   $("#party-frames").classList.toggle("hidden", !!visible);
   if (!visible) return;
   const cur = cb.order[cb.turn % cb.order.length];
-  $("#turn-order").innerHTML = (cb.domain ? `<span class="chip dom">🌀 ${esc(cb.domain.name.replace("Domain Expansion: ", ""))} (${cb.domain.rounds})</span>` : "") + `<span class="chip">R${cb.round}</span>` +
+  $("#turn-order").innerHTML = (cb.domain ? `<span class="chip dom">🌀 ${esc(cb.domain.name.replace("Domain Expansion: ", ""))} (${cb.domain.rounds})</span>` : "") + `<span class="chip rnd">R${cb.round}</span>` +
     cb.order.map((o, i) => {
-      let out = false;
-      if (o.isMonster) out = (cb.monsters.find((m) => m.id === o.id)?.hp ?? 0) <= 0;
-      else { const c = charById(o.id); out = !c || c.dead || c.fled; }
-      return `<span class="chip ${o.isMonster ? "foe" : ""} ${i === cb.turn % cb.order.length ? "cur" : ""} ${out ? "out" : ""}">${o.isMonster ? "👹" : "🛡️"} ${esc(o.name)}</span>`;
+      let out = false, img = "", f = 1;
+      if (o.isMonster) { const m = cb.monsters.find((x) => x.id === o.id); out = (m?.hp ?? 0) <= 0; if (m) { img = curseThumb(m); f = m.hp / m.maxHp; } }
+      else { const c = charById(o.id); out = !c || c.dead || c.fled; if (c) { img = portrait(c.look); f = c.hp / c.maxHp; } }
+      return `<span class="chip ${o.isMonster ? "foe" : ""} ${i === cb.turn % cb.order.length ? "cur" : ""} ${out ? "out" : ""}"><img src="${img}" alt=""><span>${esc(o.name)}</span><span class="hpl"><i style="width:${Math.max(0, Math.min(1, f)) * 100}%"></i></span></span>`;
     }).join("");
+  // Flow meter
+  const fl = cb.flow || 0, fm = cb.flowMax || 8;
+  $("#flow").className = fl >= fm ? "full" : "";
+  $("#flow").innerHTML = `<div class="lbl">FLOW <b>${fl}/${fm}</b></div><div class="pips">${Array.from({ length: fm }, (_, i) => `<i class="${i < fl ? "on" : ""}"></i>`).join("")}</div><div class="sub">${fl >= fm ? "OVERDRIVE READY" : "hit & get hit to charge"}</div>`;
+  // Party cards
+  const party = cb.order.filter((o) => !o.isMonster).map((o) => charById(o.id)).filter(Boolean);
+  $("#battle-party").innerHTML = party.map((c) => {
+    const down = c.hp <= 0 || c.dead;
+    const seg = (n, max, cls, per) => Array.from({ length: Math.ceil(max / per) }, (_, i) => `<i class="${cls} ${n > i * per ? (n >= (i + 1) * per ? "full" : "part") : ""}"></i>`).join("");
+    return `<div class="pc ${c.id === mine.id ? "me" : ""} ${down ? "down" : ""} ${cur && cur.id === c.id ? "act" : ""}"><img src="${portrait(c.look)}" alt=""><div class="pcb"><div class="nm">${esc(c.name)} <span>Lv${c.level}</span></div>
+      <div class="hpbar"><div style="width:${Math.max(0, c.hp / c.maxHp) * 100}%"></div><em>${c.hp}/${c.maxHp}</em></div>
+      <div class="cebar">${seg(c.ce, c.ceMax, "ce", 1)}</div></div></div>`;
+  }).join("");
   const combatLines = S.log.filter((l) => l.kind === "combat" || l.kind === "roll").slice(-4);
   $("#battle-ticker").innerHTML = combatLines.map((l) => `<div>${esc(l.text)}</div>`).join("");
   const menu = $("#battle-menu");
   const mineTurn = cur && cur.id === mine.id && mine.inBattle;
   if (!mineTurn) {
-    menu.innerHTML = `<div class="head"><span class="muted">${mine.inBattle ? "Waiting for" : "Watching —"} <b>${esc(cur?.name || "")}</b>…</span>${me.isHost && cur && !cur.isMonster ? '<button class="mini" id="b-skip">Skip their turn</button>' : ""}</div>`;
+    const mon = cur?.isMonster ? cb.monsters.find((m) => m.id === cur.id) : null;
+    menu.innerHTML = `<div class="head"><span class="wait">${mine.inBattle ? "Waiting for" : "Watching —"} <b>${esc(cur?.name || "")}</b>${mon?.next ? ` · <span class="warn">⚠ ${esc(mon.next)}</span>` : ""}…</span>${me.isHost && cur && !cur.isMonster ? '<button class="mini" id="b-skip">Skip their turn</button>' : ""}</div>`;
     const sk = $("#b-skip");
     if (sk) sk.onclick = () => act("/api/host/skip", {});
     return;
@@ -308,28 +344,54 @@ function renderBattleUI() {
   const abil = knownAbilities(mine);
   const alive = cb.monsters.filter((m) => m.hp > 0);
   if (!alive.find((m) => m.id === battleTarget) && !S.characters.find((c) => c.id === battleTarget)) battleTarget = alive[0]?.id || "";
-  const tgtName = cb.monsters.find((m) => m.id === battleTarget)?.name || charById(battleTarget)?.name || "—";
+  const tgt = cb.monsters.find((m) => m.id === battleTarget);
+  const tgtName = tgt?.name || charById(battleTarget)?.name || "—";
   const used = mine.used || {};
+  const actionOn = !(cb.actionUsed && !cb.extraAction);
   const btns = abil.map((a, i) => {
     const cost = abilityCost(mine, a);
     const burnt = mine.status?.burnout && a.tech && !a.universal;
-    const bad = (cost > mine.ce && !(mine.status?.jackpot)) || (a.perBattle && (used[a.id] || 0) >= a.perBattle) || (a.hpCost && mine.hp <= a.hpCost) || burnt ||
+    const noFlow = a.id === "overdrive" && fl < fm;
+    const bad = noFlow || (cost > mine.ce && !(mine.status?.jackpot)) || (a.perBattle && (used[a.id] || 0) >= a.perBattle) || (a.hpCost && mine.hp <= a.hpCost) || burnt ||
       (a.bonus && cb.bonusUsed) || (!a.bonus && cb.actionUsed && !cb.extraAction);
-    const costTxt = [cost ? cost + " CE" : "", a.hpCost ? a.hpCost + " HP" : "", a.perBattle ? `${a.perBattle - (used[a.id] || 0)}/${a.perBattle} left` : "", a.bonus ? "bonus" : ""].filter(Boolean).join(" · ") || "free";
-    return `<button class="ab ${a.domain ? "dom" : ""}" style="--c:${a.color}" data-ab="${a.id}" ${bad ? "disabled" : ""} data-tip="${esc(a.desc)}"><span class="key">${i < 9 ? i + 1 : ""}</span><b>${esc(a.name)}</b><span class="cost">${esc(costTxt)}</span></button>`;
+    const tags = [cost ? `<i class="ce">${cost} CE</i>` : "", a.hpCost ? `<i class="hp">${a.hpCost} HP</i>` : "", a.perBattle ? `<i class="us">${a.perBattle - (used[a.id] || 0)}/${a.perBattle}</i>` : "", a.bonus ? '<i class="bn">BONUS</i>' : "", a.id === "overdrive" ? '<i class="bn">FLOW</i>' : ""].filter(Boolean).join("") || '<i class="fr">FREE</i>';
+    return `<button class="ab ${a.domain ? "dom" : ""} ${a.id === "overdrive" && !noFlow ? "ult" : ""}" style="--c:${a.color}" data-ab="${a.id}" ${bad ? "disabled" : ""} data-tip="${esc(a.desc)}"><span class="key">${i < 9 ? i + 1 : ""}</span><b>${esc(a.name)}</b><span class="brief">${abilityBrief(a, mine)}</span><span class="cost">${tags}</span></button>`;
   }).join("");
   const items = mine.inventory.map((it, i) => ({ it, i })).filter((x) => x.it.kind === "consumable");
-  menu.innerHTML = `<div class="head"><span class="yourturn">⚔ Your turn, ${esc(mine.name)}!</span>
-    <span class="small muted">Target: <b style="color:#ff8fab">${esc(tgtName)}</b> (click a sprite) · Action ${cb.actionUsed && !cb.extraAction ? "used" : "ready"} · Bonus ${cb.bonusUsed ? "used" : "ready"} · CE ${mine.ce}/${mine.ceMax}</span></div>
+  const threat = alive.filter((m) => m.next).map((m) => `<span class="warn" data-foe="${m.id}">⚠ ${esc(m.name.replace(/ [A-Z]$/, ""))}: ${esc(m.next)}${m.nextAoe ? " (ALL)" : ""}</span>`).join("");
+  menu.innerHTML = `<div class="head"><span class="yourturn">Your turn, ${esc(mine.name)}</span>
+    <span class="econ"><span class="pill ${actionOn ? "on" : "off"}">Action</span><span class="pill ${cb.bonusUsed ? "off" : "on"}">Bonus</span><span class="pill tgt">🎯 ${esc(tgtName)}${tgt ? ` · ${tgt.hp}/${tgt.maxHp}` : ""}</span><span class="pill cebar">CE ${mine.ce}/${mine.ceMax}</span></span></div>
+    ${threat ? `<div class="threats">${threat}</div>` : ""}
     <div class="abilities">${btns}
-      ${items.map((x) => `<button class="ab" style="--c:#95d5b2" data-item="${x.i}" data-tip="${esc(x.it.desc || x.it.name)}"><b>🧪 ${esc(x.it.name)}${x.it.qty > 1 ? " ×" + x.it.qty : ""}</b><span class="cost">item · action</span></button>`).join("")}
-      <button class="ab" style="--c:#adb5bd" data-c="flee"><b>🏃 Flee</b><span class="cost">Agility check</span></button>
-      <button class="ab" style="--c:#ffd166" data-c="end"><b>⏭ End turn</b><span class="cost">pass</span></button>
+      ${items.map((x) => `<button class="ab util" style="--c:#95d5b2" data-item="${x.i}" data-tip="${esc(x.it.desc || x.it.name)}"><b>🧪 ${esc(x.it.name)}${x.it.qty > 1 ? " ×" + x.it.qty : ""}</b><span class="cost"><i class="us">item</i></span></button>`).join("")}
+      <button class="ab util" style="--c:#adb5bd" data-c="flee"><b>🏃 Flee</b><span class="cost"><i>agility check</i></span></button>
+      <button class="ab util" style="--c:#ffd166" data-c="end"><span class="key">E</span><b>⏭ End turn</b><span class="cost"><i>pass</i></span></button>
     </div>`;
   $$("[data-ab]", menu).forEach((b) => (b.onclick = () => useAbility(b.dataset.ab)));
   $$("[data-item]", menu).forEach((b) => (b.onclick = () => act("/api/combat", { type: "item", item: +b.dataset.item, target: battleTarget || mine.id })));
   $$("[data-c]", menu).forEach((b) => (b.onclick = () => act("/api/combat", { type: b.dataset.c })));
   bindTips(menu);
+}
+
+// Results screen after a fight.
+let lastResultSeq = -1;
+function maybeShowResults() {
+  const r = S.lastBattle;
+  if (lastResultSeq === -1) { lastResultSeq = r ? r.seq : 0; return; }   // don't replay old results on load
+  if (!r || r.seq === lastResultSeq) return;
+  lastResultSeq = r.seq;
+  if (!myChar()) return;
+  const win = r.outcome === "victory";
+  const box = $("#results");
+  box.className = win ? "win" : r.outcome === "defeat" ? "lose" : "";
+  box.innerHTML = `<div class="rt">${win ? "EXORCISM COMPLETE" : r.outcome === "defeat" ? "DEFEATED" : r.outcome === "escaped" ? "RETREAT" : "BATTLE OVER"}</div>
+    <div class="rs">${esc(r.title || "")} · ${r.rounds} round${r.rounds === 1 ? "" : "s"}</div>
+    ${r.slain?.length ? `<div class="rl">${r.slain.map((n) => `<span>👹 ${esc(n)}</span>`).join("")}</div>` : ""}
+    <div class="rr"><div><b>+${r.xp}</b><small>XP</small></div><div><b>¥${(r.yen || 0).toLocaleString()}</b><small>YEN</small></div></div>
+    <div class="rh">click to continue</div>`;
+  box.onclick = () => box.classList.add("hidden");
+  clearTimeout(maybeShowResults.t);
+  maybeShowResults.t = setTimeout(() => box.classList.add("hidden"), 7000);
 }
 
 function useAbility(id) {
