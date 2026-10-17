@@ -142,9 +142,27 @@
       <option value="ai">🧠 AI Dungeon Master — players can do literally anything</option>
       <option value="offline">🎲 Offline Dungeon Master — no internet, common actions only</option>
     </select></label>
+    <label>AI provider<select id="h-provider">
+      <option value="ollama">🖥️ Local model with Ollama — free, runs on this PC's graphics card</option>
+      <option value="anthropic">☁️ Claude (Anthropic API) — best quality, pay per use</option>
+    </select></label>
+    <div id="h-ollama">
+      <div class="row">
+        <label class="grow">Ollama model<input id="h-omodel" type="text" placeholder="qwen3:14b"></label>
+        <label style="width:150px">Memory (context)<select id="h-octx">
+          <option value="8192">8K (fastest)</option>
+          <option value="16384">16K (recommended)</option>
+          <option value="32768">32K (needs more VRAM)</option>
+        </select></label>
+      </div>
+      <label>Ollama address<input id="h-ourl" type="text" placeholder="http://localhost:11434"></label>
+      <div class="row"><button class="btn" id="h-otest">🔌 Test Ollama</button><span id="h-ostatus" class="small muted"></span></div>
+      <p class="muted small">Install Ollama from <b>ollama.com</b>, then in a terminal run <code>ollama pull qwen3:14b</code>. Keep Ollama running while you play.</p>
+    </div>
+    <div id="h-claude">
     <label for="h-key">Anthropic API key <span id="h-keyhint" class="muted"></span></label>
     <input id="h-key" type="password" placeholder="sk-ant-… (stored only on this computer)" autocomplete="off">
-    <p class="muted small">Get one at <b>console.anthropic.com</b> → API Keys. The AI DM is what lets players ask anything, take any job, befriend or betray anyone.</p>
+    <p class="muted small">Get one at <b>console.anthropic.com</b> → API Keys. Claude Haiku 5.5 is the cheapest; Opus 5.5 tells the best stories.</p>
     <div class="row">
       <label class="grow">Model<select id="h-model">
         <option value="claude-opus-5-5">Claude Opus 5.5 (best storytelling)</option>
@@ -157,6 +175,7 @@
         <option value="medium">Medium</option>
         <option value="high">High (deeper, slower)</option>
       </select></label>
+    </div>
     </div>
     <label for="h-setting">Tone notes for the DM</label>
     <textarea id="h-setting" rows="2" placeholder="e.g. More horror, fewer jokes. Kyoto arc focus. Keep it PG-13."></textarea>

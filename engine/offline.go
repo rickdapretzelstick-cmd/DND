@@ -105,7 +105,7 @@ func (d *OfflineDM) resolve(e *Engine, ch *Character, text string) {
 	}
 	if !d.hinted && !e.AIActive() {
 		d.hinted = true
-		e.Log("system", "", "💡 The offline DM understands common actions. For truly anything-goes roleplay — any question, any plan, any NPC — the host can switch on the AI Dungeon Master in ⚙ Host.")
+		e.Log("system", "", "💡 The offline DM understands common actions. For truly anything-goes roleplay — any question, any plan, any NPC — the host can switch on the AI Dungeon Master in ⚙ Host (free with Ollama on a decent graphics card).")
 	}
 }
 

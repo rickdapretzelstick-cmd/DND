@@ -19,6 +19,7 @@ import (
 // state: Claude changes things through tools, and the engine applies them.
 type ClaudeDM struct {
 	baseURL string // tests point this at a fake API
+	compact bool   // smaller turn context for local models
 }
 
 var (
@@ -110,7 +111,18 @@ func enum(desc string, v ...string) map[string]any {
 	return map[string]any{"type": "string", "enum": v, "description": desc}
 }
 
+// toolDef is a provider-neutral copy of each DM tool, used for local models.
+type toolDef struct {
+	Name     string
+	Desc     string
+	Props    any
+	Required []string
+}
+
+var allToolDefs []toolDef
+
 func tool(name, desc string, s anthropic.BetaToolInputSchemaParam) anthropic.BetaToolUnionParam {
+	allToolDefs = append(allToolDefs, toolDef{Name: name, Desc: desc, Props: s.Properties, Required: s.Required})
 	return anthropic.BetaToolUnionParam{OfTool: &anthropic.BetaToolParam{Name: name, Description: anthropic.String(desc), InputSchema: s}}
 }
 
@@ -448,12 +460,15 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 		towns = append(towns, s)
 	}
 	b.WriteString(strings.Join(towns, ", ") + "\n")
-	b.WriteString("Other cursed sites: ")
-	var sites []string
-	for _, s := range e.W.Sites {
-		sites = append(sites, fmt.Sprintf("%s [%s, %s]", s.Name, s.ID, s.Kind))
+	if !d.compact {
+		b.WriteString("Other cursed sites: ")
+		var sites []string
+		for _, s := range e.W.Sites {
+			sites = append(sites, fmt.Sprintf("%s [%s, %s]", s.Name, s.ID, s.Kind))
+		}
+		b.WriteString(strings.Join(sites, "; "))
 	}
-	b.WriteString(strings.Join(sites, "; ") + "\n</surroundings>\n\n")
+	b.WriteString("\n</surroundings>\n\n")
 
 	var qs []string
 	for _, q := range c.Quests {
@@ -469,8 +484,12 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 	}
 	b.WriteString("<recent_log>\n")
 	logs := c.Log
-	if len(logs) > 40 {
-		logs = logs[len(logs)-40:]
+	keep := 40
+	if d.compact {
+		keep = 14
+	}
+	if len(logs) > keep {
+		logs = logs[len(logs)-keep:]
 	}
 	for _, l := range logs {
 		if l.Kind == "ooc" {
@@ -510,12 +529,20 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 			fmt.Fprintf(&b, "A player is talking directly to %s [%s] (%s). Reply in character as %s — only their spoken words and small *actions*. Use tools if the conversation changes something (a deal, a job, a quest, a secret revealed).\n", n.Name, n.ID, n.Desc, n.Name)
 		}
 		for _, a := range ev.Actions {
-			fmt.Fprintf(&b, "<says character=\"%s\" id=\"%s\">%s</says>\n", a.CharName, a.CharID, a.Text)
+			if d.compact {
+				fmt.Fprintf(&b, "%s [%s] says: %s\n", a.CharName, a.CharID, a.Text)
+			} else {
+				fmt.Fprintf(&b, "<says character=\"%s\" id=\"%s\">%s</says>\n", a.CharName, a.CharID, a.Text)
+			}
 		}
 	default:
 		b.WriteString("The players act. Resolve every action — whatever it is — and make the world respond:\n")
 		for _, a := range ev.Actions {
-			fmt.Fprintf(&b, "<action character=\"%s\" id=\"%s\">%s</action>\n", a.CharName, a.CharID, a.Text)
+			if d.compact {
+				fmt.Fprintf(&b, "- %s [%s]: %s\n", a.CharName, a.CharID, a.Text)
+			} else {
+				fmt.Fprintf(&b, "<action character=\"%s\" id=\"%s\">%s</action>\n", a.CharName, a.CharID, a.Text)
+			}
 		}
 		if c.Combat != nil {
 			b.WriteString("\nA battle is in progress; techniques are used with buttons, so respond to anything else (talking, tricks, the environment) briefly.")

@@ -236,7 +236,7 @@ function renderHUD() {
       ${c.ceMax ? `<div class="bar ce"><i style="width:${(100 * c.ce) / c.ceMax}%"></i></div>` : ""}</div></div></div>`;
   }).join("");
   // Clock & DM badge
-  $("#dm-badge").textContent = S.ai ? "🧠 AI DM" : "🎲 Offline DM";
+  $("#dm-badge").textContent = S.ai ? (S.model?.startsWith("ollama:") ? "🖥️ Local AI DM" : "🧠 AI DM") : "🎲 Offline DM";
   $("#dm-badge").title = S.ai ? "The AI Dungeon Master is narrating — do anything." : "Offline DM. The host can enable the AI DM for free-form play.";
   // Tracker
   const active = S.quests.filter((q) => q.stage === "active" || q.stage === "return");
@@ -858,6 +858,11 @@ async function openHost() {
     $("#h-keyhint").textContent = info.hasKey ? `(saved ${info.keyHint})` : "(none saved)";
     $("#h-model").value = info.model;
     $("#h-effort").value = info.effort;
+    $("#h-provider").value = info.provider || "anthropic";
+    $("#h-omodel").value = info.ollamaModel || "qwen3:14b";
+    $("#h-ourl").value = info.ollamaUrl || "http://localhost:11434";
+    $("#h-octx").value = String(info.ollamaCtx || 16384);
+    showProvider();
   } catch (e) { toast(e.message); }
   if (S) { $("#h-mode").value = S.mode; $("#h-setting").value = S.setting || ""; $("#h-start").disabled = S.started; }
   loadCamps();
@@ -875,10 +880,29 @@ $("#h-start").onclick = async () => { if (await act("/api/host/start", {}, "The 
 $("#h-skip").onclick = () => act("/api/host/skip", {});
 $("#h-long").onclick = () => act("/api/host/rest", { kind: "long" });
 $("#h-save").onclick = async () => {
-  const body = { mode: $("#h-mode").value, model: $("#h-model").value, effort: $("#h-effort").value, setting: $("#h-setting").value };
+  const body = { mode: $("#h-mode").value, model: $("#h-model").value, effort: $("#h-effort").value, setting: $("#h-setting").value,
+    provider: $("#h-provider").value, ollamaModel: $("#h-omodel").value.trim(), ollamaUrl: $("#h-ourl").value.trim(), ollamaCtx: +$("#h-octx").value };
   const k = $("#h-key").value.trim();
   if (k) body.apiKey = k;
   if (await act("/api/host/settings", body, "Saved")) { $("#h-key").value = ""; openHost(); }
+};
+function showProvider() {
+  const o = $("#h-provider").value === "ollama";
+  $("#h-ollama").classList.toggle("hidden", !o);
+  $("#h-claude").classList.toggle("hidden", o);
+}
+$("#h-provider").onchange = showProvider;
+$("#h-otest").onclick = async () => {
+  const st = $("#h-ostatus");
+  st.textContent = "Checking…";
+  // Save the address/model first so the test checks what's typed.
+  await act("/api/host/settings", { ollamaModel: $("#h-omodel").value.trim(), ollamaUrl: $("#h-ourl").value.trim() });
+  try {
+    const r = await api("/api/host/ollama-test");
+    if (r.error) st.innerHTML = `<span style="color:#ff8fab">❌ ${esc(r.error)}</span>`;
+    else if (!r.hasModel) st.innerHTML = `<span style="color:#ffd166">⚠️ Ollama is running, but "${esc($("#h-omodel").value)}" isn't installed. Run <code>ollama pull ${esc($("#h-omodel").value)}</code>. Installed: ${esc((r.models || []).join(", ") || "none")}</span>`;
+    else st.innerHTML = `<span style="color:#80ed99">✅ Ollama is running and ${esc($("#h-omodel").value)} is ready. Choose "Local model", AI mode, and Save.</span>`;
+  } catch (e) { st.textContent = e.message; }
 };
 $("#h-new").onclick = async () => {
   if (await act("/api/host/new", { name: $("#h-new-name").value, setting: $("#h-new-setting").value, mode: $("#h-new-mode").value }, "New world created")) $("#host-modal").classList.add("hidden");

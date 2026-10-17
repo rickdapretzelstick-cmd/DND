@@ -225,6 +225,18 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 		_ = json.Unmarshal(b, &req)
 		return eng.RetireCharacter("", req.CharID, true)
 	})
+	s.mux.HandleFunc("/api/host/ollama-test", func(w http.ResponseWriter, r *http.Request) {
+		if !isLocal(r) {
+			http.Error(w, "host only", http.StatusForbidden)
+			return
+		}
+		models, has, err := eng.OllamaStatus(r.Context())
+		out := map[string]any{"models": models, "hasModel": has}
+		if err != nil {
+			out["error"] = err.Error()
+		}
+		writeJSON(w, out)
+	})
 	s.mux.HandleFunc("/api/host/campaigns", func(w http.ResponseWriter, r *http.Request) {
 		if !isLocal(r) {
 			http.Error(w, "host only", http.StatusForbidden)
@@ -248,12 +260,16 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 			urls = append(urls, fmt.Sprintf("http://%s:%d", ip, port))
 		}
 		var info struct {
-			URLs    []string `json:"urls"`
-			HasKey  bool     `json:"hasKey"`
-			KeyHint string   `json:"keyHint"`
-			Model   string   `json:"model"`
-			Effort  string   `json:"effort"`
-			Version string   `json:"version"`
+			Provider    string   `json:"provider"`
+			OllamaURL   string   `json:"ollamaUrl"`
+			OllamaModel string   `json:"ollamaModel"`
+			OllamaCtx   int      `json:"ollamaCtx"`
+			URLs        []string `json:"urls"`
+			HasKey      bool     `json:"hasKey"`
+			KeyHint     string   `json:"keyHint"`
+			Model       string   `json:"model"`
+			Effort      string   `json:"effort"`
+			Version     string   `json:"version"`
 		}
 		info.URLs, info.Version = urls, version
 		eng.Do(func() {
@@ -263,6 +279,7 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 				info.KeyHint = "…" + k[len(k)-4:]
 			}
 			info.Model, info.Effort = eng.Cfg.Model, eng.Cfg.Effort
+			info.Provider, info.OllamaURL, info.OllamaModel, info.OllamaCtx = eng.Cfg.Provider, eng.Cfg.OllamaURL, eng.Cfg.OllamaModel, eng.Cfg.OllamaCtx
 		})
 		writeJSON(w, info)
 	})

@@ -19,11 +19,15 @@ import (
 
 // Config holds host settings saved next to the executable.
 type Config struct {
-	APIKey string `json:"apiKey"`
-	Model  string `json:"model"`
-	Effort string `json:"effort"`
-	Port   int    `json:"port"`
-	LastID string `json:"lastCampaign"`
+	Provider    string `json:"provider"` // "anthropic" or "ollama"
+	OllamaURL   string `json:"ollamaUrl"`
+	OllamaModel string `json:"ollamaModel"`
+	OllamaCtx   int    `json:"ollamaCtx"`
+	APIKey      string `json:"apiKey"`
+	Model       string `json:"model"`
+	Effort      string `json:"effort"`
+	Port        int    `json:"port"`
+	LastID      string `json:"lastCampaign"`
 }
 
 // PendingAction is something a player asked the DM to resolve.
@@ -54,14 +58,16 @@ type Engine struct {
 	OnPos    func()
 	DMBusy   bool
 
-	queue    []DMEvent
-	wake     chan struct{}
-	offline  *OfflineDM
-	ai       *ClaudeDM
-	dirty    bool
-	posDirty bool
-	warned   map[string]bool
-	dialogs  map[string]*dialogCtx
+	queue       []DMEvent
+	wake        chan struct{}
+	offline     *OfflineDM
+	ollama      *OllamaDM
+	testBackend DMBackend
+	ai          DMBackend
+	dirty       bool
+	posDirty    bool
+	warned      map[string]bool
+	dialogs     map[string]*dialogCtx
 }
 
 const DefaultModel = "claude-opus-5-5"
@@ -77,6 +83,7 @@ func New(dir string) *Engine {
 	if e.Cfg.Effort == "" {
 		e.Cfg.Effort = "low"
 	}
+	e.Cfg.fillOllamaDefaults()
 	if e.Cfg.LastID != "" {
 		if c, err := e.readCampaign(e.Cfg.LastID); err == nil {
 			e.setCampaign(c)
@@ -100,7 +107,7 @@ func New(dir string) *Engine {
 
 func newBare(dir string) *Engine {
 	e := &Engine{Dir: filepath.Join(dir, "saves"), cfgPath: filepath.Join(dir, "dnd-runner-config.json"),
-		wake: make(chan struct{}, 1), offline: &OfflineDM{}, ai: &ClaudeDM{}, warned: map[string]bool{}, dialogs: map[string]*dialogCtx{}}
+		wake: make(chan struct{}, 1), offline: &OfflineDM{}, ai: &ClaudeDM{}, ollama: &OllamaDM{}, warned: map[string]bool{}, dialogs: map[string]*dialogCtx{}}
 	_ = os.MkdirAll(e.Dir, 0o755)
 	return e
 }
@@ -112,7 +119,31 @@ func (e *Engine) APIKey() string {
 	return os.Getenv("ANTHROPIC_API_KEY")
 }
 
-func (e *Engine) AIActive() bool { return e.C.Mode == "ai" && e.APIKey() != "" }
+// DMBackend is an AI Dungeon Master implementation.
+type DMBackend interface {
+	Handle(ctx context.Context, e *Engine, ev DMEvent) error
+}
+
+func (e *Engine) AIActive() bool {
+	if e.C.Mode != "ai" {
+		return false
+	}
+	if e.Cfg.Provider == "ollama" {
+		return true
+	}
+	return e.APIKey() != ""
+}
+
+// backend picks the AI DM for the configured provider.
+func (e *Engine) backend() DMBackend {
+	if e.testBackend != nil {
+		return e.testBackend
+	}
+	if e.Cfg.Provider == "ollama" {
+		return e.ollama
+	}
+	return e.ai
+}
 
 func (e *Engine) saveConfig() {
 	b, _ := json.MarshalIndent(e.Cfg, "", "  ")
@@ -374,12 +405,16 @@ func (e *Engine) DeleteCampaign(id string) error {
 }
 
 type SettingsUpdate struct {
-	APIKey  *string `json:"apiKey"`
-	Model   string  `json:"model"`
-	Effort  string  `json:"effort"`
-	Mode    string  `json:"mode"`
-	Setting *string `json:"setting"`
-	Name    string  `json:"name"`
+	Provider    string  `json:"provider"`
+	OllamaURL   string  `json:"ollamaUrl"`
+	OllamaModel string  `json:"ollamaModel"`
+	OllamaCtx   int     `json:"ollamaCtx"`
+	APIKey      *string `json:"apiKey"`
+	Model       string  `json:"model"`
+	Effort      string  `json:"effort"`
+	Mode        string  `json:"mode"`
+	Setting     *string `json:"setting"`
+	Name        string  `json:"name"`
 }
 
 func (e *Engine) UpdateSettings(u SettingsUpdate) {
@@ -387,6 +422,18 @@ func (e *Engine) UpdateSettings(u SettingsUpdate) {
 	defer e.mu.Unlock()
 	if u.APIKey != nil {
 		e.Cfg.APIKey = strings.TrimSpace(*u.APIKey)
+	}
+	if u.Provider == "anthropic" || u.Provider == "ollama" {
+		e.Cfg.Provider = u.Provider
+	}
+	if v := strings.TrimSpace(u.OllamaURL); v != "" {
+		e.Cfg.OllamaURL = strings.TrimRight(v, "/")
+	}
+	if v := strings.TrimSpace(u.OllamaModel); v != "" {
+		e.Cfg.OllamaModel = v
+	}
+	if u.OllamaCtx >= 2048 && u.OllamaCtx <= 131072 {
+		e.Cfg.OllamaCtx = u.OllamaCtx
 	}
 	if u.Model != "" {
 		e.Cfg.Model = strings.TrimSpace(u.Model)
@@ -462,7 +509,7 @@ func (e *Engine) SnapshotJSON() []byte {
 	c := e.C
 	s := Snapshot{ID: c.ID, Name: c.Name, Setting: c.Setting, Mode: c.Mode, Started: c.Started, Seed: c.Seed, Location: c.Location,
 		Quest: c.Quest, Act: c.Act, Combat: c.Combat, Rep: c.Rep, Discovered: c.Discovered, Cleared: c.Cleared, Extra: c.ExtraNPCs,
-		Journal: c.Journal, DMBusy: e.DMBusy, AI: e.AIActive(), HasKey: e.APIKey() != "", Model: e.Cfg.Model, Effort: e.Cfg.Effort,
+		Journal: c.Journal, DMBusy: e.DMBusy, AI: e.AIActive(), HasKey: e.APIKey() != "" || e.Cfg.Provider == "ollama", Model: e.modelLabel(), Effort: e.Cfg.Effort,
 		Players: []publicPlayer{}, Characters: []*Character{}, Log: []LogEntry{}, Quests: []*Quest{}, Gone: []string{}, Burned: []string{}}
 	for _, p := range c.Players {
 		s.Players = append(s.Players, publicPlayer{p.ID, p.Name, p.CharID, p.Online})
@@ -1026,7 +1073,7 @@ func (e *Engine) dmWorker() {
 			e.mu.Unlock()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-			err := e.ai.Handle(ctx, e, ev)
+			err := e.backend().Handle(ctx, e, ev)
 			cancel()
 
 			e.mu.Lock()
