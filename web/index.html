@@ -9,6 +9,7 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
+<canvas id="title-bg" class="hidden"></canvas>
 
 <!-- ============ HUD ============ -->
 <div id="hud" class="hidden">
@@ -16,7 +17,7 @@
 
   <div id="topright">
     <div id="clockbar"><span id="clock"></span><span id="dm-badge" class="badge"></span><span id="conn" class="badge"><i class="dot"></i></span></div>
-    <canvas id="minimap" width="168" height="168"></canvas>
+    <div id="mm-wrap"><canvas id="minimap" width="200" height="200"></canvas><span class="compass">N ▲</span><span class="mmk">地図</span></div>
     <div id="tracker"></div>
   </div>
 
@@ -25,7 +26,7 @@
   <div id="story-card" class="hidden"></div>
 
   <div id="log" class="collapsed">
-    <div id="log-head"><span>📜 Story log</span><button id="log-toggle" class="mini">▲</button></div>
+    <div id="log-head"><span>記録 · Story log</span><button id="log-toggle" class="mini">▲</button></div>
     <div id="log-lines"></div>
   </div>
 
@@ -39,10 +40,10 @@
       <button id="act-send" class="btn primary">Send</button>
     </div>
     <div id="bar-buttons">
-      <button class="btn" data-panel="sheet" title="Character (C)">🧑 <u>C</u>haracter</button>
-      <button class="btn" data-panel="quests" title="Quests (Q)">📜 <u>Q</u>uests</button>
-      <button class="btn" data-panel="map" title="Map (M)">🗺️ <u>M</u>ap</button>
-      <button class="btn hidden" id="btn-host" title="Host controls">⚙ Host</button>
+      <button class="btn" data-panel="sheet" title="Character (C)"><span class="ic">🧑</span><span class="lbl"><u>C</u>haracter</span></button>
+      <button class="btn" data-panel="quests" title="Quests (Q)"><span class="ic">📜</span><span class="lbl"><u>Q</u>uests</span></button>
+      <button class="btn" data-panel="map" title="Map (M)"><span class="ic">🗺️</span><span class="lbl"><u>M</u>ap</span></button>
+      <button class="btn hidden" id="btn-host" title="Host controls"><span class="ic">⚙</span><span class="lbl">Host</span></button>
     </div>
   </div>
 
@@ -53,7 +54,7 @@
   </div>
 
   <div id="dialog" class="hidden">
-    <canvas id="dialog-portrait" width="96" height="144"></canvas>
+    <canvas id="dialog-portrait" width="144" height="216"></canvas>
     <div id="dialog-body">
       <div id="dialog-name"></div>
       <div id="dialog-text"></div>
@@ -77,6 +78,7 @@
   </div>
 
   <div id="panel" class="hidden">
+    <div id="panel-tabs"><button data-tab="sheet"><span class="kj">術</span>Character</button><button data-tab="quests"><span class="kj">任</span>Quests</button><button data-tab="map"><span class="kj">地</span>Map</button></div>
     <button id="panel-close" class="mini">✕</button>
     <div id="panel-body"></div>
   </div>
@@ -88,22 +90,26 @@
 
 <!-- ============ Join ============ -->
 <section id="join" class="screen hidden">
-  <div class="title-card">
+  <div class="title-wrap"><div class="title-card">
     <div class="kanji">呪術</div>
     <h1>Jujutsu Chronicles</h1>
+    <div class="sub">Sorcerers · Curses · Domains</div>
     <p>A self-running multiplayer jujutsu RPG. Walk the world, exorcise curses, master your cursed technique — and decide what kind of sorcerer you'll be.</p>
     <label for="join-name">Your name (the player)</label>
     <input id="join-name" type="text" maxlength="30" placeholder="e.g. Sam" autocomplete="off">
-    <button id="btn-join" class="btn primary big">Enter</button>
-  </div>
+    <button id="btn-join" class="btn primary big">Enter the world</button>
+    <div class="foot">呪いには呪いでしか対抗できない</div>
+  </div></div>
 </section>
 
 <!-- ============ Creator ============ -->
 <section id="create" class="screen hidden">
   <div class="creator">
     <div class="creator-left">
+      <span class="kbg">呪術師</span>
       <h2>Your sorcerer</h2>
       <canvas id="preview" width="192" height="288"></canvas>
+      <div class="pedestal"></div>
       <div class="row center"><button class="mini" id="rot-l">⟲</button><button class="mini" id="randomize">🎲 Randomize</button><button class="mini" id="rot-r">⟳</button></div>
       <div id="look-controls"></div>
     </div>
