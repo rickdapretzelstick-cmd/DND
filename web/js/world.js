@@ -54,16 +54,109 @@ export class WorldView {
     return cv;
   }
 
+  atmosphere(ctx, W, H, v, zoom, now) {
+    const { left, top, tpx, ox, oy, tx0, ty0, tx1, ty1 } = v;
+    const clock = this.clock ?? 12;
+    const night = clock >= 19 || clock < 5;
+    // drifting cloud shadows
+    if (!WorldView.cloudCv) {
+      const [cv, c] = makeCanvas(64, 64);
+      const im = c.createImageData(64, 64);
+      for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+        // tileable value noise
+        let a = 0, amp = 1, tot = 0;
+        for (let o = 0; o < 3; o++) {
+          const f = 4 << o, gx = (x / 64) * f, gy = (y / 64) * f;
+          const x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+          const hh = (ix, iy) => hash(((ix % f) + f) % f, ((iy % f) + f) % f, 40 + o);
+          const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+          const top2 = hh(x0, y0) * (1 - sx) + hh(x0 + 1, y0) * sx, bot = hh(x0, y0 + 1) * (1 - sx) + hh(x0 + 1, y0 + 1) * sx;
+          a += (top2 * (1 - sy) + bot * sy) * amp; tot += amp; amp *= 0.5;
+        }
+        const t = Math.max(0, (a / tot - 0.5) * 3.2);
+        const i = (y * 64 + x) * 4;
+        im.data[i] = 10; im.data[i + 1] = 20; im.data[i + 2] = 40; im.data[i + 3] = Math.min(255, t * 120);
+      }
+      c.putImageData(im, 0, 0);
+      WorldView.cloudCv = cv;
+    }
+    if (!night) {
+      const size = 56 * tpx, dx = (now / 1000) * 0.9 * tpx, dy = (now / 1000) * 0.35 * tpx;
+      const sx0 = ((ox + dx) % size + size) % size - size, sy0 = ((oy + dy) % size + size) % size - size;
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 0.5;
+      for (let x = sx0; x < W; x += size) for (let y = sy0; y < H; y += size) ctx.drawImage(WorldView.cloudCv, x, y, size, size);
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = false;
+    }
+    // cursed wisps rising from corrupted ground
+    for (let y = ty0; y <= ty1; y++) for (let x = tx0; x <= tx1; x++) {
+      if (this.at(x, y) !== T.CURSED) continue;
+      const h = hash(x, y, 77);
+      if (h > 0.07) continue;
+      const ph = ((now / 2600) + h * 14) % 1;
+      const sx = ox + (x + 0.5 + Math.sin(ph * 6 + h * 20) * 0.25) * tpx, sy = oy + (y + 0.8) * tpx - ph * 30 * zoom;
+      ctx.fillStyle = `rgba(${150 + h * 600 | 0},70,230,${(1 - ph) * 0.5})`;
+      ctx.fillRect(Math.round(sx), Math.round(sy), zoom * 2, zoom * (3 + ph * 3));
+      ctx.fillStyle = `rgba(230,190,255,${(1 - ph) * 0.4})`;
+      ctx.fillRect(Math.round(sx), Math.round(sy), zoom, zoom * 2);
+    }
+    // sakura petals / leaves by day, fireflies by night (screen-space, wrap around)
+    const N = night ? 36 : 44;
+    for (let i = 0; i < N; i++) {
+      const h1 = hash(i, 1, 5), h2 = hash(i, 2, 5), h3 = hash(i, 3, 5);
+      if (night) {
+        const px = (h1 * W + Math.sin(now / 1800 + i) * 40 + (now / 40) * (h3 - 0.5)) % W;
+        const py = (h2 * H + Math.cos(now / 2300 + i * 2) * 30) % H;
+        const a = 0.35 + 0.65 * Math.max(0, Math.sin(now / 500 + i * 1.7));
+        ctx.globalCompositeOperation = "lighter";
+        const g = ctx.createRadialGradient(px, py, 0, px, py, 7 * zoom);
+        g.addColorStop(0, `rgba(210,255,120,${a * 0.9})`); g.addColorStop(1, "rgba(210,255,120,0)");
+        ctx.fillStyle = g; ctx.fillRect(px - 8 * zoom, py - 8 * zoom, 16 * zoom, 16 * zoom);
+        ctx.globalCompositeOperation = "source-over";
+      } else {
+        const t = now / 1000;
+        const px = (((h1 * W + t * (28 + h3 * 30) + Math.sin(t * 1.6 + i) * 18) % (W + 40)) + W + 40) % (W + 40) - 20;
+        const py = (((h2 * H + t * (22 + h3 * 20)) % (H + 40)) + H + 40) % (H + 40) - 20;
+        ctx.fillStyle = i % 5 === 0 ? "#d9a13b" : i % 2 ? "#ffc4d6" : "#ffe0ea";
+        const flip = Math.sin(t * 5 + i) > 0;
+        ctx.fillRect(Math.round(px), Math.round(py), zoom * (flip ? 2 : 1), zoom * (flip ? 1 : 2));
+      }
+    }
+    // vignette
+    if (!WorldView.vig || WorldView.vig.width !== W || WorldView.vig.height !== H) {
+      const [cv, c] = makeCanvas(W, H);
+      const g = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.hypot(W, H) * 0.56);
+      g.addColorStop(0, "rgba(6,8,24,0)"); g.addColorStop(1, "rgba(6,8,24,0.55)");
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+      WorldView.vig = cv;
+    }
+    ctx.drawImage(WorldView.vig, 0, 0);
+  }
+
   buildMinimap() {
-    const [cv, ctx] = makeCanvas(this.w.w, this.w.h);
-    const img = ctx.createImageData(this.w.w, this.w.h);
-    for (let i = 0; i < this.tiles.length; i++) {
-      const c = MINIMAP_COLORS[this.tiles[i]] || "#000";
-      const n = parseInt(c.slice(1), 16);
-      img.data[i * 4] = (n >> 16) & 255;
-      img.data[i * 4 + 1] = (n >> 8) & 255;
-      img.data[i * 4 + 2] = n & 255;
-      img.data[i * 4 + 3] = 255;
+    const W = this.w.w, H = this.w.h;
+    const [cv, ctx] = makeCanvas(W, H);
+    const img = ctx.createImageData(W, H);
+    const height = (t) => (t === T.PEAK ? 3 : t === T.ROCK ? 2.2 : t === T.HILL ? 1.4 : t === T.FOREST ? 0.6 : t === T.BUILDING ? 1.2 : 0);
+    const land = (t) => t !== T.DEEP && t !== T.WATER;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = this.tiles[y * W + x];
+      const n = parseInt((MINIMAP_COLORS[t] || "#000").slice(1), 16);
+      let r = (n >> 16) & 255, g = (n >> 8) & 255, bl = n & 255;
+      let k = 0.92 + hash(x, y, 3) * 0.16;
+      k += (height(this.at(x - 1, y - 1)) - height(this.at(x + 1, y + 1))) * 0.07;
+      if (t === T.FOREST && hash(x, y, 4) > 0.55) k *= 0.8;
+      if (t === T.WATER || t === T.DEEP) {
+        const shore = [this.at(x - 1, y), this.at(x + 1, y), this.at(x, y - 1), this.at(x, y + 1)].some(land);
+        if (shore) { r = 120; g = 190; bl = 215; k = 1; }
+      } else if (t === T.BUILDING) { r = 200; g = 80; bl = 60; }
+      else if (t === T.SAND || land(t)) {
+        const wet = [this.at(x - 1, y), this.at(x + 1, y), this.at(x, y - 1), this.at(x, y + 1)].some((q) => q === T.WATER || q === T.DEEP);
+        if (wet) k *= 0.88;
+      }
+      const i = (y * W + x) * 4;
+      img.data[i] = Math.min(255, r * k); img.data[i + 1] = Math.min(255, g * k); img.data[i + 2] = Math.min(255, bl * k); img.data[i + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
     return cv;
@@ -106,8 +199,13 @@ export class WorldView {
     }
     const toScreen = (x, y) => [ox + x * tpx, oy + y * tpx];
     ents = ents.slice();
+    this.lights = [];
+    const LIT = { lamp: [24, 70], lantern: [12, 46] };
     for (const b of this.w.buildings) {
       if (b.x + b.w + 3 < left || b.x - 3 > left + W / tpx || b.y + b.h + 1 < top || b.y - 6 > top + H / tpx + 4) continue;
+      if (["inn", "shop", "temple", "elder", "station", "office", "apartment", "tower", "store", "infirmary", "dorm"].includes(b.kind)) {
+        this.lights.push({ x: ox + (b.x + b.w / 2) * tpx, y: oy + (b.y + b.h) * tpx - 12 * zoom, r: Math.max(b.w, 3) * 7 * zoom + 24, warm: true });
+      }
       ents.push({ x: b.x + b.w / 2, y: b.y + b.h, draw: (c2, sx, sy, z) => {
         const sp = buildingSprite(b);
         c2.drawImage(sp.cv, Math.round(sx - (b.w * 8 + sp.ox) * z), Math.round(sy - (sp.ext + sp.H) * z), sp.cv.width * z, sp.cv.height * z);
@@ -119,6 +217,7 @@ export class WorldView {
       for (const p of c.props) {
         if (p.x < left - 3 || p.x > left + W / tpx + 3 || p.y < top - 1 || p.y > top + H / tpx + 4) continue;
         const sp = propSprite(p.kind, p.v);
+        if (LIT[p.kind]) this.lights.push({ x: ox + p.x * tpx, y: oy + p.y * tpx - LIT[p.kind][0] * zoom, r: LIT[p.kind][1] * zoom * 0.5 + 24, warm: true });
         ents.push({ x: p.x, y: p.y, draw: (c2, sx, sy, z, t) => {
           c2.fillStyle = "rgba(10,20,30,0.28)";
           c2.beginPath(); c2.ellipse(sx + z * 2, sy, sp.ax * z * 0.55, Math.max(2, sp.cv.height * 0.07) * z, 0, 0, 7); c2.fill();
@@ -134,7 +233,8 @@ export class WorldView {
       if (sx < -80 || sy < -80 || sx > W + 80 || sy > H + 120) continue;
       e.draw(ctx, sx, sy, zoom, now);
     }
-    return { left, top, tpx, toScreen };
+    this.atmosphere(ctx, W, H, { left, top, tpx, ox, oy, tx0, ty0, tx1, ty1 }, zoom, now);
+    return { left, top, tpx, toScreen, lights: this.lights };
   }
 }
 

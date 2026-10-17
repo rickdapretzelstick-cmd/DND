@@ -781,6 +781,7 @@ function frame(now) {
       marker(c, "!", sx, sy - 20 * z, t);
     } });
   }
+  world.clock = clock;
   const view = world.draw(ctx, W, H, cam, zoom, now, list);
   // Lighting
   const lights = [];
@@ -790,6 +791,7 @@ function frame(now) {
     const [sx, sy] = view.toScreen(e.x, e.y);
     lights.push({ x: sx, y: sy - 8 * zoom, r: 90 * zoom * 0.5 + 40 });
   }
+  for (const l of view.lights || []) lights.push(l);
   for (const n of npcList()) {
     if (["inn", "shop", "elder", "monk"].includes(n.role)) {
       const [sx, sy] = view.toScreen(n.x, n.y - 1);
@@ -822,7 +824,7 @@ function drawMinimap(me2) {
   mmT = now;
   const c = $("#minimap");
   const x = c.getContext("2d");
-  x.imageSmoothingEnabled = false;
+  x.imageSmoothingEnabled = true;
   const R = 42; // tiles shown each way
   x.fillStyle = "#0b1a3a";
   x.fillRect(0, 0, c.width, c.height);

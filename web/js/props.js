@@ -2,6 +2,8 @@
 import { T, hash } from "./pixel.js";
 
 const cache = new Map();
+function shade2(h) { return "#" + rgb(h).map((v) => Math.round(v * 0.7).toString(16).padStart(2, "0")).join(""); }
+export const LIT_KINDS = { lamp: { dy: 24, r: 70 }, lantern: { dy: 12, r: 46 } };
 
 function rgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function shade(c, k) { return c.map((v) => Math.max(0, Math.min(255, Math.round(v * k)))); }
@@ -131,6 +133,41 @@ function makeSprite(kind, v) {
       });
       return { cv: sp, ax: 13, ay: 33 };
     }
+    case "lamp": {
+      const sp = sprite(10, 30, (d, w) => {
+        trunk(d, w, 4, 8, 29, 2, [46, 50, 58]);
+        trunk(d, w, 2, 28, 30, 6, [46, 50, 58]);
+        for (let y = 1; y < 8; y++) for (let x = 2; x < 8; x++) put(d, w, x, y, rgb(y < 3 ? "#fff3c0" : "#ffd36a"));
+        for (let x = 1; x < 9; x++) put(d, w, x, 0, rgb("#2e323a"));
+      });
+      return { cv: sp, ax: 5, ay: 29 };
+    }
+    case "lantern": {
+      const sp = sprite(12, 20, (d, w) => {
+        for (let y = 0; y < 3; y++) for (let x = 1 + y * 0; x < 11; x++) put(d, w, x, y, rgb(y ? "#8c9096" : "#b4b8bc"));
+        for (let y = 3; y < 8; y++) for (let x = 3; x < 9; x++) put(d, w, x, y, rgb(x === 3 || x === 8 ? "#6a6e74" : "#ffcf6a"));
+        for (let y = 8; y < 18; y++) for (let x = 4; x < 8; x++) put(d, w, x, y, rgb(x < 5 ? "#b4b8bc" : "#6a6e74"));
+        for (let x = 2; x < 10; x++) { put(d, w, x, 18, rgb("#8c9096")); put(d, w, x, 19, rgb("#6a6e74")); }
+      });
+      return { cv: sp, ax: 6, ay: 19 };
+    }
+    case "vending": {
+      const col = [["#d43a3a", "#ff7a7a"], ["#2a74d4", "#7ab0ff"], ["#2aa464", "#7affb0"]][v % 3];
+      const sp = sprite(12, 20, (d, w) => {
+        for (let y = 0; y < 19; y++) for (let x = 0; x < 11; x++) put(d, w, x, y, rgb(x < 1 ? col[1] : x > 9 ? shade2(col[0]) : col[0]));
+        for (let y = 2; y < 11; y++) for (let x = 2; x < 9; x++) put(d, w, x, y, rgb((x + y) % 3 ? "#dff4ff" : "#9ad0ee"));
+        for (let x = 2; x < 9; x++) put(d, w, x, 13, rgb("#222"));
+        for (let x = 3; x < 7; x++) put(d, w, x, 16, rgb("#111"));
+      });
+      return { cv: sp, ax: 6, ay: 19 };
+    }
+    case "bench": {
+      const sp = sprite(18, 11, (d, w) => {
+        for (let x = 0; x < 18; x++) { put(d, w, x, 1, rgb("#9a6a3a")); put(d, w, x, 2, rgb("#9a6a3a")); put(d, w, x, 5, rgb("#b07a44")); put(d, w, x, 6, rgb("#7a4e28")); }
+        for (const x of [1, 15]) for (let y = 2; y < 9; y++) { put(d, w, x, y, rgb("#3a3a42")); put(d, w, x + 1, y, rgb("#2a2a32")); }
+      });
+      return { cv: sp, ax: 9, ay: 9 };
+    }
     case "reed": {
       const sp = sprite(10, 16, (d, w) => {
         for (const [x, top] of [[2, 4], [5, 1], [7, 6]]) for (let y = top; y < 14; y++) put(d, w, x, y, rgb(y < top + 3 ? "#8a6a3a" : "#5c9a4a"));
@@ -175,6 +212,13 @@ export function chunkProps(at, cx, cy, size = 32) {
     } else if (t === T.CURSED) {
       if (h < 0.06) out.push({ x: px, y: py, kind: "dead", v: v & 1 });
       else if (h < 0.11) out.push({ x: px, y: py, kind: "crystal", v: v & 1 });
+    } else if (t === T.SIDEWALK) {
+      const nearRoad = [at(tx - 1, ty), at(tx + 1, ty), at(tx, ty - 1), at(tx, ty + 1)].includes(T.PAVED);
+      if (nearRoad && (tx * 3 + ty * 5) % 7 === 0) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lamp", v: 0 });
+      else if (h < 0.025 && at(tx, ty - 1) === T.BUILDING) out.push({ x: tx + 0.5, y: ty + 0.95, kind: "vending", v });
+    } else if (t === T.PLAZA) {
+      if (tx % 5 === 0 && ty % 5 === 0 && h < 0.7) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lantern", v: 0 });
+      else if (h < 0.02) out.push({ x: tx + 0.5, y: ty + 0.8, kind: "bench", v: 0 });
     } else if (t === T.WATER && h < 0.04) {
       const shore = [at(tx - 1, ty), at(tx + 1, ty), at(tx, ty - 1), at(tx, ty + 1)].some((n) => n === T.SAND || n === T.GRASS);
       if (shore) out.push({ x: px, y: py, kind: "reed", v: 0 });
