@@ -1,7 +1,8 @@
 // Overworld rendering.
+import { buildingSprite, drawBuildingShadow } from "./buildings.js";
 import { chunkProps, propSprite } from "./props.js";
 import { renderChunk } from "./terrain.js";
-import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, drawTile, drawBuilding, charSprite, curseSprite, hash } from "./pixel.js";
+import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, charSprite, curseSprite, hash } from "./pixel.js";
 
 const CHUNK = 32;
 
@@ -44,7 +45,7 @@ export class WorldView {
     cv.foam = r.foam;
     const bctx = cv.getContext("2d");
     for (const b of this.buildingsByChunk.get(k) || []) {
-      drawBuilding(bctx, b, (b.x - cx * CHUNK) * TILE, (b.y - cy * CHUNK) * TILE);
+      drawBuildingShadow(bctx, b, (b.x - cx * CHUNK) * TILE, (b.y - cy * CHUNK) * TILE);
     }
     cv.props = chunkProps((x, y) => this.at(x, y), cx, cy);
     cv.ms = performance.now() - t0;
@@ -105,6 +106,13 @@ export class WorldView {
     }
     const toScreen = (x, y) => [ox + x * tpx, oy + y * tpx];
     ents = ents.slice();
+    for (const b of this.w.buildings) {
+      if (b.x + b.w + 3 < left || b.x - 3 > left + W / tpx || b.y + b.h + 1 < top || b.y - 6 > top + H / tpx + 4) continue;
+      ents.push({ x: b.x + b.w / 2, y: b.y + b.h, draw: (c2, sx, sy, z) => {
+        const sp = buildingSprite(b);
+        c2.drawImage(sp.cv, Math.round(sx - (b.w * 8 + sp.ox) * z), Math.round(sy - (sp.ext + sp.H) * z), sp.cv.width * z, sp.cv.height * z);
+      } });
+    }
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const c = this.chunks.get(cx + "," + cy);
       if (!c || !c.props) continue;

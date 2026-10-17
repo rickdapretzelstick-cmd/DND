@@ -582,7 +582,7 @@ export function drawBuilding(ctx, b, x0, y0) {
   }
 }
 
-function drawSite(ctx, b, x0, y0, W, H) {
+export function drawSite(ctx, b, x0, y0, W, H) {
   const k = b.kind.slice(5);
   switch (k) {
     case "shrine": case "grove": {

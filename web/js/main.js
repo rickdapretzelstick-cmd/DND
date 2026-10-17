@@ -735,7 +735,7 @@ function frame(now) {
   }
   zoom = Math.max(2, Math.min(4, Math.round(H / (16 * 18))));
   const me2 = ents.get(mine.id);
-  const cam = { x: me2.x, y: me2.y - 0.5 };
+  const cam = window.__cam || { x: me2.x, y: me2.y - 0.5 };
   // Build entity list
   const list = [];
   const markers = S.markers || {};
