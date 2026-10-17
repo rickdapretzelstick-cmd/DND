@@ -2,7 +2,8 @@
 import { buildingSprite, drawBuildingShadow } from "./buildings.js";
 import { chunkProps, propSprite } from "./props.js";
 import { renderChunk } from "./terrain.js";
-import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, charSprite, curseSprite, hash } from "./pixel.js";
+import { curseSprite } from "./curses.js";
+import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, charSprite, hash } from "./pixel.js";
 
 const CHUNK = 32;
 

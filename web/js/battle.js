@@ -1,5 +1,6 @@
 // Turn-based battle scene: backgrounds, actors, and technique VFX.
-import { charSprite, curseSprite, hash, shade } from "./pixel.js";
+import { charSprite, hash, shade } from "./pixel.js";
+import { curseSprite, curseSize } from "./curses.js";
 
 const VFX = {
   beam: ["blood_beam", "love_beam", "beam", "amber", "sonic", "spear"],
@@ -124,9 +125,9 @@ export class BattleView {
       const n = mons.length;
       let x, y;
       if (n <= 2) { y = H * (n > 1 ? 0.47 + (i / (n - 1)) * 0.12 : 0.53); x = W * (n > 1 ? 0.64 + i * 0.1 : 0.7); }
-      else { const col = Math.floor(i / 2), row = i % 2; x = W * (0.50 + col * 0.14 + row * 0.07); y = H * (row ? 0.58 : 0.47); }
+      else { const cols = Math.ceil(n / 2), sp = cols > 1 ? Math.min(0.21, 0.36 / (cols - 1)) : 0, col = Math.floor(i / 2), row = i % 2; x = W * (0.48 + col * sp + row * 0.1); y = H * (row ? 0.58 : 0.47); }
       const size = m.sprite.size || 1;
-      const scale = Math.max(3, Math.floor((H * (0.14 + size * 0.06)) / (16 + size * 12) * (n > 3 ? 0.85 : 1)));
+      const scale = Math.max(3, Math.floor((H * (0.14 + size * 0.06)) / curseSize(m.sprite, true) * (n > 3 ? 0.62 : 1)));
       L[m.id] = { x, y, scale, party: false };
     });
     this.layout = L;
@@ -363,7 +364,7 @@ export class BattleView {
         const m = cb.monsters.find((x) => x.id === id);
         if (!m) continue;
         hp = m.hp; max = m.maxHp; name = m.name;
-        spr = curseSprite(m.sprite, m.template, Math.floor(now / 350) % 2);
+        spr = curseSprite(m.sprite, m.template, Math.floor(now / 350) % 2, true);
         w = spr.width * p.scale; h = spr.height * p.scale;
         if (m.hp <= 0) {
           const t = a.down ? Math.min(1, (now - a.down) / 900) : 1;
@@ -373,13 +374,11 @@ export class BattleView {
         if (alpha > 0) {
           ctx.save();
           ctx.globalAlpha = alpha;
-          ctx.translate(Math.round(p.x + dx), 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(spr, Math.round(-w / 2), Math.round(p.y - h + bob + dy), w, h);
+          ctx.drawImage(spr, Math.round(p.x + dx - w / 2), Math.round(p.y - h + bob + dy + 3 * p.scale), w, h);
           if (a.hit && now - a.hit < 140) {
             ctx.globalCompositeOperation = "lighter";
             ctx.globalAlpha = 0.7;
-            ctx.drawImage(spr, Math.round(-w / 2), Math.round(p.y - h + bob + dy), w, h);
+            ctx.drawImage(spr, Math.round(p.x + dx - w / 2), Math.round(p.y - h + bob + dy + 3 * p.scale), w, h);
           }
           ctx.restore();
         }

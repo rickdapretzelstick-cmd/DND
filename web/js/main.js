@@ -1,4 +1,5 @@
-import { TILE, charSprite, curseSprite, makeCanvas, SKIN, HAIR_STYLES, OUTFITS, ACCESSORIES, BUILDS } from "./pixel.js";
+import { curseSprite } from "./curses.js";
+import { TILE, charSprite, makeCanvas, SKIN, HAIR_STYLES, OUTFITS, ACCESSORIES, BUILDS } from "./pixel.js";
 import { WorldView, drawCharacter, drawCurseEntity, nameplate, marker, bubble, drawLighting } from "./world.js";
 import { BattleView } from "./battle.js";
 
