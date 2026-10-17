@@ -23,6 +23,54 @@ export class WorldView {
       }
     }
     this.minimap = this.buildMinimap();
+    this.walkers = this.makeWalkers();
+    this.lastT = 0;
+  }
+
+  // Townsfolk who just live there: they wander, pause and chat so towns never feel empty.
+  makeWalkers() {
+    const out = [];
+    const palette = ["#14141c", "#22223b", "#264653", "#2a9d8f", "#e9c46a", "#e76f51", "#9d0208", "#f8f9fa", "#6c584c", "#457b9d", "#7b2cbf", "#ff8fab", "#3d405b"];
+    const hairs = ["#1b1b1b", "#3b2a1a", "#6b4423", "#a0522d", "#d4a373", "#f1e3c4", "#2d6a4f", "#457b9d"];
+    for (const t of this.w.towns) {
+      const n = Math.max(3, Math.min(18, Math.round(t.r / 3.2)));
+      for (let i = 0; i < n; i++) {
+        const h = (k) => hash(t.x + i * 17, t.y + k, 4242);
+        const look = { skin: Math.floor(h(1) * 4), hair: Math.floor(h(2) * 12), hairColor: hairs[Math.floor(h(3) * hairs.length)], outfit: Math.floor(h(4) * 8), color1: palette[Math.floor(h(5) * palette.length)], color2: palette[Math.floor(h(6) * palette.length)], eyes: "#3b2a1a", build: Math.floor(h(7) * 3), accessory: h(8) > 0.85 ? Math.floor(1 + h(9) * 7) : 0 };
+        let x = t.x, y = t.y;
+        for (let tries = 0; tries < 40; tries++) {
+          const a = hash(i, tries, t.x) * 6.283, r = Math.sqrt(hash(tries, i, t.y)) * t.r * 0.85;
+          const px = t.x + Math.cos(a) * r, py = t.y + Math.sin(a) * r;
+          if (this.walkable(px, py)) { x = px; y = py; break; }
+        }
+        out.push({ town: t, look, x, y, tx: x, ty: y, wait: h(10) * 3, speed: 1.1 + h(11) * 1.1, dir: 0, moving: false, id: t.id + i, awake: h(12) > 0.3 });
+      }
+    }
+    return out;
+  }
+
+  stepWalkers(dt, cam, night) {
+    for (const wk of this.walkers) {
+      if (Math.hypot(wk.x - cam.x, wk.y - cam.y) > 90) { wk.moving = false; continue; }
+      if (wk.wait > 0) { wk.wait -= dt; wk.moving = false; continue; }
+      let dx = wk.tx - wk.x, dy = wk.ty - wk.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 0.6) {
+        for (let tries = 0; tries < 12; tries++) {
+          const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * wk.town.r * 0.85;
+          const px = wk.town.x + Math.cos(a) * r, py = wk.town.y + Math.sin(a) * r;
+          if (this.walkable(px, py) && Math.hypot(px - wk.x, py - wk.y) < 40) { wk.tx = px; wk.ty = py; break; }
+        }
+        wk.wait = 0.5 + Math.random() * 4; wk.moving = false;
+        continue;
+      }
+      const sp = wk.speed * dt, nx = wk.x + (dx / d) * sp, ny = wk.y + (dy / d) * sp;
+      if (this.walkable(nx, ny) && this.walkable(nx, ny - 0.4)) {
+        wk.x = nx; wk.y = ny; wk.moving = true;
+        const sx = Math.abs(dx) > d * 0.38 ? Math.sign(dx) : 0, sy = Math.abs(dy) > d * 0.38 ? Math.sign(dy) : 0;
+        wk.dir = sx && sy ? (sy > 0 ? (sx < 0 ? 4 : 5) : (sx < 0 ? 6 : 7)) : sx ? (sx < 0 ? 1 : 2) : sy < 0 ? 3 : 0;
+      } else { wk.tx = wk.x; wk.ty = wk.y; wk.wait = 0.3; wk.moving = false; }
+    }
   }
 
   at(x, y) {
@@ -200,6 +248,16 @@ export class WorldView {
     }
     const toScreen = (x, y) => [ox + x * tpx, oy + y * tpx];
     ents = ents.slice();
+    const dtw = this.lastT ? Math.min(0.1, (now - this.lastT) / 1000) : 0;
+    this.lastT = now;
+    const camc = { x: left + W / tpx / 2, y: top + H / tpx / 2 };
+    const night = (this.clock ?? 12) >= 21 || (this.clock ?? 12) < 5;
+    this.stepWalkers(dtw, camc, night);
+    for (const wk of this.walkers) {
+      if (night && !wk.awake) continue;
+      if (wk.x < left - 2 || wk.x > left + W / tpx + 2 || wk.y < top - 2 || wk.y > top + H / tpx + 4) continue;
+      ents.push({ x: wk.x, y: wk.y, draw: (c2, sx, sy, z, t) => drawCharacter(c2, sx, sy, z, wk.look, wk.dir, wk.moving, t + wk.x * 97) });
+    }
     this.lights = [];
     const LIT = { lamp: [24, 70], lantern: [12, 46] };
     for (const b of this.w.buildings) {

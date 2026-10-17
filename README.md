@@ -124,3 +124,8 @@ Open the host panel (⚙ Host) and click **🌍 Go online**. The app opens a fre
 Quests aren't limited to a list. Ask anyone "any odd jobs?" (or type "can I be your assistant?" to the offline DM) and the game builds a quest from the real NPCs, shops and sites nearby: errands, deliveries, waiting out time, checking on people, exorcising a curse made up for the job. The tracker shows every step, how far away the next one is, and an arrow at the screen edge points to it. Finishing a job can earn a title and a **fabricated skill** (for example the nurse's assistant's *Bedside Manner*, +2 healing).
 
 With an AI DM (Claude or a local Ollama model) the same system is open-ended: the DM can call `create_quest` with its own steps for any scheme a player proposes, `add_quest_step` / `update_quest` as the story changes, `create_skill` for odd perks (passives are small and capped, active moves scale with level), and `create_curse` to invent a new curse with balanced stats, moves and a sprite. The engine owns every number, so the AI can be as creative as it likes with names and fiction without breaking the game.
+
+
+## A world at human scale
+
+One tile is about a metre. The map is 800 x 800 tiles: a house is ~12 m wide, a town ~70 m across, Shibuya a real city grid, and crossing the island on foot takes a few minutes (Shift sprints; Ijichi drives you between towns you've visited). Open the map (M) to see the whole island: click a ! to track a quest, click anywhere to drop a waypoint, and a dotted route (G toggles it) leads the way. People with a ➕ over their head are looking for help today. Townsfolk wander the streets so places feel lived in.

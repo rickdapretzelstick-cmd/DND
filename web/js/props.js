@@ -171,6 +171,34 @@ function makeSprite(kind, v) {
       });
       return { cv: sp, ax: 9, ay: 9 };
     }
+    case "stall": {
+      const awn = [["#d63a3a", "#f4f0e6"], ["#2a8f82", "#f4f0e6"], ["#e9a23a", "#f4f0e6"], ["#3a5fb0", "#f4f0e6"]][v % 4];
+      const sp = sprite(50, 40, (d, w) => {
+        for (let y = 20; y < 38; y++) for (let x = 3; x < 47; x++) put(d, w, x, y, rgb(y < 24 ? "#b88a54" : x % 9 === 0 ? "#6b4a2a" : "#8a6238"));
+        for (let x = 5; x < 45; x += 2) for (let y = 12; y < 20; y++) put(d, w, x, y, rgb((x >> 1) % 2 ? awn[0] : awn[1]));
+        for (let x = 5; x < 45; x++) put(d, w, x, 20, rgb(shade2(awn[0])));
+        for (let y = 12; y < 38; y++) { put(d, w, 3, y, rgb("#4a3420")); put(d, w, 46, y, rgb("#4a3420")); }
+        for (let i = 0; i < 6; i++) { blob(d, w, 9 + i * 6.4, 19, 3, 2.4, [["#c1121f", "#e63946", "#f4796a", "#ffb3a7"], ["#e9a23a", "#f6bd60", "#ffd98a", "#fff0c0"], ["#2d6a4f", "#40916c", "#74c69d", "#b7e4c7"]][(i + v) % 3], seed + i); }
+      });
+      return { cv: sp, ax: 25, ay: 38 };
+    }
+    case "fountain": {
+      const sp = sprite(70, 44, (d, w) => {
+        blob(d, w, 35, 30, 33, 12, ["#6e6a66", "#8c8782", "#aaa5a0", "#d0cbc6"], seed);
+        blob(d, w, 35, 28, 28, 9, ["#2a63ae", "#3c82cc", "#6cb1ee", "#bfe3ff"], seed + 1);
+        for (let y = 8; y < 28; y++) for (let x = 33; x < 38; x++) put(d, w, x, y, rgb(x === 33 ? "#cfe9ff" : x === 37 ? "#6cb1ee" : "#9fd0f5"));
+        blob(d, w, 35, 8, 8, 4, ["#6e6a66", "#8c8782", "#aaa5a0", "#d0cbc6"], seed + 2);
+      });
+      return { cv: sp, ax: 35, ay: 40 };
+    }
+    case "planter": {
+      const sp = sprite(36, 40, (d, w) => {
+        for (let y = 28; y < 38; y++) for (let x = 5; x < 31; x++) put(d, w, x, y, rgb(y < 30 ? "#a8754a" : x % 7 === 0 ? "#6b4a2a" : "#8a5d38"));
+        blob(d, w, 18, 24, 14, 9, PALETTES.bush, seed);
+        for (let i = 0; i < 5; i++) { const fx = 8 + i * 5, fy = 20 + (i * 3) % 6; for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) put(d, w, fx + a, fy + b, rgb(["#ff8fab", "#ffd166", "#cdb4db", "#fff"][(i + v) % 4])); }
+      });
+      return { cv: sp, ax: 18, ay: 37 };
+    }
     case "reed": {
       const sp = sprite(10, 16, (d, w) => {
         for (const [x, top] of [[2, 4], [5, 1], [7, 6]]) for (let y = top; y < 14; y++) put(d, w, x, y, rgb(y < top + 3 ? "#8a6a3a" : "#5c9a4a"));
@@ -220,7 +248,10 @@ export function chunkProps(at, cx, cy, size = 32) {
       if (nearRoad && (tx * 3 + ty * 5) % 19 === 0) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lamp", v: 0 });
       else if (h < 0.006 && at(tx, ty - 1) === T.BUILDING) out.push({ x: tx + 0.5, y: ty + 0.95, kind: "vending", v });
     } else if (t === T.PLAZA) {
-      if (tx % 14 === 0 && ty % 14 === 0 && h < 0.8) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lantern", v: 0 });
+      if (tx % 26 === 13 && ty % 26 === 13 && at(tx + 1, ty) === T.PLAZA && at(tx, ty + 1) === T.PLAZA) out.push({ x: tx + 0.5, y: ty + 1.2, kind: "fountain", v: 0 });
+      else if (tx % 14 === 0 && ty % 14 === 0 && h < 0.8) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lantern", v: 0 });
+      else if (h < 0.004 && at(tx + 2, ty) === T.PLAZA && at(tx, ty + 2) === T.PLAZA) out.push({ x: tx + 1, y: ty + 1.4, kind: "stall", v });
+      else if (h > 0.996) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "planter", v });
       else if (h < 0.004) out.push({ x: tx + 0.5, y: ty + 0.8, kind: "bench", v: 0 });
     } else if (t === T.WATER && h < 0.015) {
       const shore = [at(tx - 1, ty), at(tx + 1, ty), at(tx, ty - 1), at(tx, ty + 1)].some((n) => n === T.SAND || n === T.GRASS);
