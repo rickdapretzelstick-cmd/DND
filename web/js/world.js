@@ -1,4 +1,5 @@
 // Overworld rendering.
+import { chunkProps, propSprite } from "./props.js";
 import { renderChunk } from "./terrain.js";
 import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, drawTile, drawBuilding, charSprite, curseSprite, hash } from "./pixel.js";
 
@@ -45,6 +46,7 @@ export class WorldView {
     for (const b of this.buildingsByChunk.get(k) || []) {
       drawBuilding(bctx, b, (b.x - cx * CHUNK) * TILE, (b.y - cy * CHUNK) * TILE);
     }
+    cv.props = chunkProps((x, y) => this.at(x, y), cx, cy);
     cv.ms = performance.now() - t0;
     this.chunks.set(k, cv);
     if (this.chunks.size > 30) this.chunks.delete(this.chunks.keys().next().value);
@@ -102,6 +104,21 @@ export class WorldView {
       }
     }
     const toScreen = (x, y) => [ox + x * tpx, oy + y * tpx];
+    ents = ents.slice();
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      const c = this.chunks.get(cx + "," + cy);
+      if (!c || !c.props) continue;
+      for (const p of c.props) {
+        if (p.x < left - 3 || p.x > left + W / tpx + 3 || p.y < top - 1 || p.y > top + H / tpx + 4) continue;
+        const sp = propSprite(p.kind, p.v);
+        ents.push({ x: p.x, y: p.y, draw: (c2, sx, sy, z, t) => {
+          c2.fillStyle = "rgba(10,20,30,0.28)";
+          c2.beginPath(); c2.ellipse(sx + z * 2, sy, sp.ax * z * 0.55, Math.max(2, sp.cv.height * 0.07) * z, 0, 0, 7); c2.fill();
+          const sway = p.kind === "oak" || p.kind === "sakura" || p.kind === "autumn" ? Math.sin(t / 900 + p.x * 3) * 0.4 * z : 0;
+          c2.drawImage(sp.cv, Math.round(sx - sp.ax * z + sway), Math.round(sy - sp.ay * z), sp.cv.width * z, sp.cv.height * z);
+        } });
+      }
+    }
     // Entities, y-sorted
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) {
