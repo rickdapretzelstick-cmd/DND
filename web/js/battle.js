@@ -295,6 +295,7 @@ export class BattleView {
     this.computeLayout(W, H);
     this.step(now, W, H);
     ctx.save();
+    ctx.imageSmoothingEnabled = false;
     if (this.punch) {
       const pt = (now - this.punch.t0) / 420;
       if (pt >= 1) this.punch = null;
@@ -324,8 +325,9 @@ export class BattleView {
       const bob = Math.sin(now / 400 + p.x) * 2;
       const isCur = cur && cur.id === id;
       // ground shadow and turn ring
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
-      ctx.beginPath(); ctx.ellipse(p.x + dx, p.y, 12 * p.scale * (p.party ? 0.6 : 0.8), 3 * p.scale, 0, 0, Math.PI * 2); ctx.fill();
+      const gone = !p.party && (cb.monsters.find((x) => x.id === id)?.hp ?? 1) <= 0;
+      if (!gone) { ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath(); ctx.ellipse(p.x + dx, p.y, 12 * p.scale * (p.party ? 0.6 : 0.8), 3 * p.scale, 0, 0, Math.PI * 2); ctx.fill(); }
       if (isCur) {
         ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.ellipse(p.x, p.y, 14 * p.scale * (p.party ? 0.6 : 0.8), 4 * p.scale, 0, 0, Math.PI * 2); ctx.stroke();

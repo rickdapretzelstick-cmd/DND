@@ -72,6 +72,13 @@ const HSTYLES = [
   { bang: "swoop", top: "tall", side: 2 },
 ];
 
+// Snap anti-aliased edges to hard pixels so scaled sprites stay crisp.
+function crisp(cv) {
+  const ctx = cv.getContext("2d"), img = ctx.getImageData(0, 0, cv.width, cv.height), d = img.data;
+  for (let i = 3; i < d.length; i += 4) d[i] = d[i] > 110 ? 255 : 0;
+  ctx.putImageData(img, 0, 0);
+}
+
 // Outline pass: dark, hue-aware outline around the silhouette.
 function outline(cv) {
   const w = cv.width, h = cv.height, ctx = cv.getContext("2d");
@@ -353,6 +360,7 @@ export function curseSprite(spec, id = "", frame = 0) {
   const S = 16 + size * 12;
   const [cv, ctx] = makeCanvas(S, S);
   drawCurse(ctx, spec, S, rng(strSeed(id || spec.color)), frame);
+  crisp(cv);
   outline(cv);
   curseCache.set(key, cv);
   return cv;

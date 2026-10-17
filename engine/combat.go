@@ -231,6 +231,9 @@ func (e *Engine) spawnMonster(sp Spawn, n, of int) (*Monster, error) {
 	m := &Monster{ID: e.nextID("m"), Template: t.ID, Name: t.Name, AC: t.AC, ToHit: t.ToHit, Init: t.Init, Save: t.Save, Rank: t.Rank,
 		XP: t.XP, Yen: t.Yen, Boss: t.Boss, Domain: t.Domain, Escapes: t.Escapes, Status: map[string]int{}, Sprite: t.Sprite}
 	m.MaxHP = max(1, MustRoll(t.HP).Total)
+	if !t.Boss && t.Rank <= 3 { // keep ordinary fights snappy
+		m.MaxHP = max(1, m.MaxHP*80/100)
+	}
 	// Curses scale with the number of sorcerers fighting them.
 	if parts := len(e.C.Combat.Order); parts > 1 && t.Boss {
 		m.MaxHP = m.MaxHP * (100 + 30*min(parts-1, 3)) / 100
