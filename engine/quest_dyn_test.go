@@ -123,3 +123,56 @@ func TestSkillCapsAreBounded(t *testing.T) {
 		t.Fatal("unknown active effect must be rejected")
 	}
 }
+
+func TestImprovWorksForEveryNPCAndIntent(t *testing.T) {
+	e := newTestEngine(t)
+	_, ch := addHero(t, e, "Ren", "non_clan", "straw_doll")
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	made := 0
+	for _, n := range e.allNPCs() {
+		for _, text := range []string{"", "I want a job", "can I be your apprentice", "I'll run an errand for you", "teach me to fight", "looking into the missing people", "got any pests to clear out?"} {
+			q, line := e.ImprovQuest(ch, n, text)
+			if line == "" {
+				t.Fatalf("%s/%q: NPC said nothing", n.Name, text)
+			}
+			if q == nil {
+				continue
+			}
+			made++
+			if len(q.Steps) == 0 || q.Title == "" {
+				t.Fatalf("%s/%q: empty quest %+v", n.Name, text, q)
+			}
+			for _, st := range q.Steps {
+				if st.Text == "" || st.Type == "" {
+					t.Fatalf("%s/%q: bad step %+v", n.Name, text, st)
+				}
+			}
+			e.C.Quests = e.C.Quests[:len(e.C.Quests)-1]
+		}
+	}
+	if made < 50 {
+		t.Fatalf("only %d quests built", made)
+	}
+}
+
+func TestOfflineDMFreeTextBuildsQuest(t *testing.T) {
+	e := newTestEngine(t)
+	_, ch := addHero(t, e, "Ren", "non_clan", "limitless")
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	n := e.npcByID("shoko")
+	(&OfflineDM{}).npcReply(e, ch, n, "Shoko, I'd like to become your assistant")
+	var got *Quest
+	for _, q := range e.C.Quests {
+		if q.Giver == "shoko" && q.Kind == "ai" {
+			got = q
+		}
+	}
+	if got == nil || got.Stage != "active" || len(got.Steps) < 3 {
+		t.Fatalf("free text should start an improvised quest: %+v", got)
+	}
+	if !strings.Contains(got.RewardTitle, "Assistant") {
+		t.Fatalf("title should echo the request: %q", got.RewardTitle)
+	}
+}
