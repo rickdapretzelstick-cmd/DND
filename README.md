@@ -1,16 +1,28 @@
-# 🐉 D&D Campaign Runner
+# 👁️ Jujutsu Chronicles (D&D Campaign Runner)
 
-A self-running, multiplayer tabletop RPG for Windows. One person runs the `.exe`, everyone else joins from a
-browser (laptop, tablet or phone), each player makes a hero, and the **Dungeon Master runs itself**:
+A self-running, multiplayer **Jujutsu Kaisen RPG** for Windows. One person runs the `.exe`; everyone joins from a
+browser. You design a pixel-art sorcerer, walk a procedurally generated world with **WASD**, exorcise curses in
+animated turn-based battles, and play a branching story — run by an AI Dungeon Master (or an offline one).
 
-- **AI Dungeon Master (Claude):** improvises the story, voices NPCs, remembers your campaign, and sets up fights,
-  traps and loot. The rules engine still rolls every die, so the AI can't fudge the numbers. Needs an Anthropic
-  API key (pay-per-use).
-- **Offline Dungeon Master:** needs no internet or key. It generates dungeons chapter by chapter (caves, cursed
-  forests, crypts, ruined keeps), with fights scaled to your party, traps, locked chests, NPCs, a town shop and
-  boss lairs. It runs forever.
+## What's in it
+- **Visual world:** a generated island with towns, the city of Shibuya, Tokyo Jujutsu High, roads, bridges, forests
+  and 14 cursed sites. Day/night cycle, minimap, speech bubbles, other players moving in real time.
+- **Pixel character creator:** skin, 12 hair styles, colors, 8 outfits, accessories (blindfold, glasses, collar mask...).
+- **15 cursed techniques** (homebrew, anime-inspired): Limitless, Ten Shadows, Cursed Speech, Straw Doll, Blood
+  Manipulation, Shrine, Disaster Flames, Idle Transfiguration, Ratio, Boogie Woogie, Projection Sorcery, Private Pure
+  Love Train, Cursed Partner, Heavenly Restriction, Construction, Mythical Beast Amber — 4 moves each plus a
+  **Domain Expansion**. Everyone gets Black Flash, Binding Vows, Simple Domain and Reverse Cursed Technique.
+- **6 clans** (Gojo, Zenin, Kamo, Inumaki, Half-Curse, Non-Clan) and **26 curses** from Grade 4 to Special Grade
+  (Jogo, Hanami, Dagon, Mahito, Kenjaku, Sukuna...). Curses roam the map; touch one and a battle starts.
+- **Battles:** turn order, cursed energy, statuses, domain clashes, 19 animated domain arenas, Black Flash.
+- **Story:** a five-act main story that branches on your choices (Sukuna's finger, Junpei, Jogo vs Hanami, the Kyoto
+  event, Shibuya) with different endings, plus endless side jobs from town mayors, shops, inns, Shoko's healing and
+  Ijichi's rides between towns.
+- **Anything goes (AI DM):** with an Anthropic API key, type anything — the AI DM can create NPCs, quests, titles,
+  items and party choices in response. The offline DM handles common actions without internet.
 
-If the AI can't be reached (no internet, bad key), the offline DM covers that moment and the game keeps going.
+Controls: **WASD** move (Shift to run) · **E** talk · **Enter** type an action · **C** character · **Q** quests ·
+**M** map · **1-9** pick options / techniques.
 
 ## Quick start
 

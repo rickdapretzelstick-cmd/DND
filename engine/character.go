@@ -21,12 +21,12 @@ func Roll4d6() []int {
 	return out
 }
 
-// AssignByPriority maps sorted-descending scores onto a class's ability priority.
-func AssignByPriority(scores []int, class Class) map[string]int {
+// AssignByPriority maps scores onto a technique's ability priority.
+func AssignByPriority(scores []int, tech Technique) map[string]int {
 	s := slices.Clone(scores)
 	sort.Sort(sort.Reverse(sort.IntSlice(s)))
 	m := map[string]int{}
-	for i, ab := range class.Priority {
+	for i, ab := range tech.Priority {
 		m[ab] = s[i]
 	}
 	return m
@@ -43,14 +43,23 @@ func sameMultiset(a, b []int) bool {
 }
 
 func (c *Character) Mod(ab string) int { return Mod(c.Stats[ab]) }
+func (c *Character) Tech() Technique   { return Techniques[c.Class] }
+func (c *Character) Prof() int         { return ProfBonus(c.Level) }
+func (c *Character) Conscious() bool   { return !c.Dead && c.HP > 0 && !c.Fled }
+func (c *Character) Grade() string     { return SorcererGrade(c.Level) }
 
-func (c *Character) ClassDef() Class { return Classes[c.Class] }
+// CastMod is the ability modifier that powers techniques.
+func (c *Character) CastMod() int { return c.Mod(c.Tech().Priority[0]) }
 
-func (c *Character) Prof() int { return ProfBonus(c.Level) }
+func (c *Character) SpellAttack() int { return c.CastMod() + c.Prof() }
 
-func (c *Character) Conscious() bool { return !c.Dead && c.HP > 0 && !c.Fled }
-
-func (c *Character) HasFeature(f string) bool { return slices.Contains(c.Features, f) }
+func (c *Character) SpellDC() int {
+	dc := 8 + c.CastMod() + c.Prof()
+	if c.Race == "inumaki" {
+		dc++
+	}
+	return dc
+}
 
 func (c *Character) Equipped(kind string) *Item {
 	for i := range c.Inventory {
@@ -61,37 +70,31 @@ func (c *Character) Equipped(kind string) *Item {
 	return nil
 }
 
-// Weapon returns the equipped weapon, or an unarmed strike.
 func (c *Character) Weapon() Item {
 	if w := c.Equipped("weapon"); w != nil {
 		return *w
 	}
-	return Item{ID: "unarmed", Name: "Fists", Kind: "weapon", Damage: "1", DmgType: "bludgeoning"}
+	it := ItemList["fists"]
+	return it
 }
 
 func (c *Character) RecalcAC() {
 	dex := c.Mod("DEX")
 	ac := 10 + dex
 	if a := c.Equipped("armor"); a != nil {
-		switch {
-		case a.ID == "unarmored_barb":
-			ac = 10 + dex + c.Mod("CON")
-		case a.MaxDex < 0:
+		if a.MaxDex < 0 {
 			ac = a.BaseAC + dex
-		default:
+		} else {
 			ac = a.BaseAC + min(dex, a.MaxDex)
 		}
 		ac += a.Bonus
-	} else if c.Class == "barbarian" {
-		ac = 10 + dex + c.Mod("CON")
 	}
-	if s := c.Equipped("shield"); s != nil {
-		ac += s.BaseAC + s.Bonus
+	if c.Class == "heavenly_restriction" {
+		ac += 2
 	}
 	c.AC = ac
 }
 
-// AttackStat picks STR or DEX for a weapon.
 func (c *Character) AttackStat(w Item) string {
 	if w.Ranged {
 		return "DEX"
@@ -102,53 +105,114 @@ func (c *Character) AttackStat(w Item) string {
 	return "STR"
 }
 
-func (c *Character) AttackBonus(w Item) int { return c.Mod(c.AttackStat(w)) + c.Prof() + w.Bonus }
-
-func (c *Character) SpellAttack() int { return c.Mod(c.ClassDef().CastStat) + c.Prof() }
-
-func (c *Character) SpellDC() int { return 8 + c.Mod(c.ClassDef().CastStat) + c.Prof() }
+func (c *Character) AttackBonus(w Item) int {
+	b := c.Mod(c.AttackStat(w)) + c.Prof() + w.Bonus
+	if c.Race == "zenin" {
+		b++
+	}
+	return b
+}
 
 func (c *Character) NumAttacks() int {
-	switch c.Class {
-	case "fighter":
-		if c.Level >= 11 {
+	switch {
+	case c.Class == "heavenly_restriction" && c.Level >= 3:
+		if c.Level >= 9 {
 			return 3
 		}
-		if c.Level >= 5 {
-			return 2
-		}
-	case "barbarian", "ranger", "paladin":
-		if c.Level >= 5 {
-			return 2
-		}
+		return 2
+	case c.Level >= 5 && (c.Tech().HitDie >= 10):
+		return 2
 	}
 	return 1
 }
 
-func (c *Character) SkillProficient(skill string) bool {
-	if slices.Contains(c.Skills, skill) {
-		return true
+// CEMaxFor computes the cursed-energy pool.
+func (c *Character) CEMaxFor() int {
+	if c.Tech().NoCE {
+		return 0
 	}
-	return c.Race == "elf" && skill == "perception"
+	n := 6 + 3*c.Level + 2*max(0, c.CastMod())
+	if c.Race == "kamo" {
+		n += 5
+	}
+	return n
 }
 
-// NormalizeSkill turns user/AI text like "Sleight of Hand" or "dex" into a skill id or ability code.
+// AbilityCost returns the CE cost after origin discounts.
+func (c *Character) AbilityCost(a Ability) int {
+	cost := a.Cost
+	if c.Race == "gojo" && cost > 1 {
+		cost--
+	}
+	return cost
+}
+
+// KnownAbilities lists every ability the character can use, in display order.
+func (c *Character) KnownAbilities() []Ability {
+	var out []Ability
+	for _, id := range []string{"strike", "guard", "binding_vow", "simple_domain", "rct"} {
+		a := AbilityList[id]
+		if c.Level >= a.MinLevel {
+			if id == "simple_domain" && c.Tech().NoCE {
+				continue
+			}
+			out = append(out, a)
+		}
+	}
+	t := c.Tech()
+	for _, id := range t.Moves {
+		if a := AbilityList[id]; c.Level >= a.MinLevel {
+			out = append(out, a)
+		}
+	}
+	if d, ok := AbilityList[t.Domain]; ok && c.Level >= d.MinLevel {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (c *Character) Knows(id string) bool {
+	for _, a := range c.KnownAbilities() {
+		if a.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Character) SkillProficient(skill string) bool { return slices.Contains(c.Skills, skill) }
+
+// NormalizeSkill turns text like "Sleight of Hand" or "dex" into a skill id or ability code.
 func NormalizeSkill(s string) string {
 	t := strings.ToLower(strings.TrimSpace(s))
 	t = strings.ReplaceAll(t, " ", "_")
 	t = strings.ReplaceAll(t, "-", "_")
+	alias := map[string]string{"arcana": "jujutsu_lore", "religion": "barriers", "nature": "survival", "animal_handling": "insight", "lore": "jujutsu_lore", "sense": "curse_sense"}
+	if a, ok := alias[t]; ok {
+		t = a
+	}
 	if _, ok := Skills[t]; ok {
 		return t
 	}
-	ab := map[string]string{"str": "STR", "strength": "STR", "dex": "DEX", "dexterity": "DEX", "con": "CON",
-		"constitution": "CON", "int": "INT", "intelligence": "INT", "wis": "WIS", "wisdom": "WIS", "cha": "CHA", "charisma": "CHA"}
+	ab := map[string]string{"str": "STR", "strength": "STR", "dex": "DEX", "dexterity": "DEX", "agility": "DEX", "con": "CON",
+		"constitution": "CON", "toughness": "CON", "int": "INT", "intelligence": "INT", "technique": "INT", "wis": "WIS", "wisdom": "WIS",
+		"perception_ability": "WIS", "cha": "CHA", "charisma": "CHA", "will": "CHA"}
 	if a, ok := ab[t]; ok {
 		return a
 	}
 	return ""
 }
 
-// CheckResult describes a resolved d20 test.
+func SkillLabel(key string) string {
+	words := strings.Split(key, "_")
+	for i, w := range words {
+		if w != "of" && w != "" {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
 type CheckResult struct {
 	Name    string
 	Label   string
@@ -178,22 +242,12 @@ func (r CheckResult) String() string {
 	return out
 }
 
-func (c *Character) d20(adv int) (int, []int) {
-	r, d := D20(adv)
-	if c.Race == "halfling" && r == 1 {
-		r = Die(20)
-		d = append(d, r)
-	}
-	return r, d
-}
-
-// Check rolls an ability check for a skill id or ability code.
 func (c *Character) Check(skillOrAbility string, dc, adv int) CheckResult {
 	key := NormalizeSkill(skillOrAbility)
 	if key == "" {
 		key = "WIS"
 	}
-	ab, label := key, key
+	ab, label := key, AbilityNames[key]
 	bonus := 0
 	if a, ok := Skills[key]; ok {
 		ab = a
@@ -203,7 +257,7 @@ func (c *Character) Check(skillOrAbility string, dc, adv int) CheckResult {
 		}
 	}
 	bonus += c.Mod(ab)
-	roll, dice := c.d20(adv)
+	roll, dice := D20(adv)
 	total := roll + bonus
 	return CheckResult{Name: c.Name, Label: label + " check", Roll: roll, Dice: dice, Bonus: bonus, Total: total,
 		DC: dc, Success: dc == 0 || total >= dc, Nat20: roll == 20, Nat1: roll == 1}
@@ -216,13 +270,13 @@ func (c *Character) Save(ab string, dc, adv int) CheckResult {
 		ab = "CON"
 	}
 	bonus := c.Mod(ab)
-	cl := c.ClassDef()
-	if cl.Priority[0] == ab || cl.Priority[1] == ab {
+	t := c.Tech()
+	if t.Priority[0] == ab || t.Priority[1] == ab {
 		bonus += c.Prof()
 	}
-	roll, dice := c.d20(adv)
+	roll, dice := D20(adv)
 	total := roll + bonus
-	return CheckResult{Name: c.Name, Label: ab + " save", Roll: roll, Dice: dice, Bonus: bonus, Total: total,
+	return CheckResult{Name: c.Name, Label: AbilityNames[ab] + " save", Roll: roll, Dice: dice, Bonus: bonus, Total: total,
 		DC: dc, Success: total >= dc, Nat20: roll == 20, Nat1: roll == 1}
 }
 
@@ -231,7 +285,7 @@ func (c *Character) AddItem(it Item) {
 		it.Qty = 1
 	}
 	for i := range c.Inventory {
-		if c.Inventory[i].ID == it.ID && c.Inventory[i].Name == it.Name && (it.Kind == "potion" || it.Kind == "gear" || it.Kind == "treasure") {
+		if c.Inventory[i].ID == it.ID && c.Inventory[i].Name == it.Name && it.Kind != "weapon" && it.Kind != "armor" {
 			c.Inventory[i].Qty += it.Qty
 			return
 		}
@@ -239,7 +293,15 @@ func (c *Character) AddItem(it Item) {
 	c.Inventory = append(c.Inventory, it)
 }
 
-// RemoveItem removes qty of the first item whose id or name matches.
+func (c *Character) HasItem(id string) bool {
+	for _, it := range c.Inventory {
+		if it.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Character) RemoveItem(idOrName string, qty int) (Item, bool) {
 	q := strings.ToLower(idOrName)
 	for i := range c.Inventory {
@@ -247,6 +309,7 @@ func (c *Character) RemoveItem(idOrName string, qty int) (Item, bool) {
 		if strings.ToLower(it.ID) == q || strings.ToLower(it.Name) == q || (q != "" && strings.Contains(strings.ToLower(it.Name), q)) {
 			if qty <= 0 || qty >= it.Qty {
 				c.Inventory = slices.Delete(c.Inventory, i, i+1)
+				c.RecalcAC()
 				return it, true
 			}
 			c.Inventory[i].Qty -= qty
@@ -262,9 +325,7 @@ func (c *Character) Equip(index int) error {
 		return fmt.Errorf("no such item")
 	}
 	it := &c.Inventory[index]
-	switch it.Kind {
-	case "weapon", "armor", "shield":
-	default:
+	if it.Kind != "weapon" && it.Kind != "armor" {
 		return fmt.Errorf("%s can't be equipped", it.Name)
 	}
 	if it.Equipped {
@@ -281,62 +342,18 @@ func (c *Character) Equip(index int) error {
 	return nil
 }
 
-// featureUses returns how many uses a limited feature has at the character's level.
-func (c *Character) featureUses(f string) int {
-	switch f {
-	case FSecondWind:
-		return 1
-	case FActionSurge:
-		if c.Level >= 2 {
-			return 1
-		}
-		return 0
-	case FRage:
-		switch {
-		case c.Level >= 12:
-			return 5
-		case c.Level >= 6:
-			return 4
-		case c.Level >= 3:
-			return 3
-		}
-		return 2
-	case FLayOnHands:
-		return 5 * c.Level
-	}
-	return 0
-}
-
-func (c *Character) restoreUses(shortOnly bool) {
-	if c.Uses == nil {
-		c.Uses = map[string]int{}
-	}
-	for _, f := range c.Features {
-		if shortOnly && f != FSecondWind && f != FActionSurge {
-			continue
-		}
-		if n := c.featureUses(f); n > 0 {
-			c.Uses[f] = n
-		}
-	}
-}
-
 func (c *Character) ShortRest() int {
 	if c.Dead {
 		return 0
 	}
-	cl := c.ClassDef()
 	dice := max(1, (c.Level+1)/2)
 	healed := 0
 	for i := 0; i < dice; i++ {
-		healed += max(1, Die(cl.HitDie)+c.Mod("CON"))
+		healed += max(1, Die(c.Tech().HitDie)+c.Mod("CON"))
 	}
-	c.heal(healed)
-	c.restoreUses(true)
-	if c.Class == "wizard" { // arcane recovery, simplified
-		c.Slots = min(c.SlotsMax, c.Slots+max(1, c.Level/2))
-	}
-	return healed
+	got := c.heal(healed)
+	c.CE = min(c.CEMax, c.CE+c.CEMax/2)
+	return got
 }
 
 func (c *Character) LongRest() {
@@ -344,10 +361,9 @@ func (c *Character) LongRest() {
 		return
 	}
 	c.HP = c.MaxHP
-	c.Slots = c.SlotsMax
-	c.restoreUses(false)
+	c.CE = c.CEMax
 	c.DeathSaves, c.DeathFails, c.Stable = 0, 0, false
-	c.Relentless = false
+	c.Status = map[string]int{}
 }
 
 func (c *Character) heal(n int) int {
@@ -362,57 +378,37 @@ func (c *Character) heal(n int) int {
 	return c.HP - before
 }
 
-// TakeDamage applies damage and reports what happened.
+// TakeDamage applies final damage and reports what happened.
 func (c *Character) TakeDamage(n int, crit bool) string {
-	if c.Dead {
+	if c.Dead || n <= 0 {
 		return ""
 	}
-	if c.Raging {
-		n = n / 2
-	}
 	if c.HP <= 0 {
-		c.DeathFails += 1
+		c.DeathFails++
 		if crit {
 			c.DeathFails++
 		}
 		if c.DeathFails >= 3 {
 			c.Dead = true
-			return fmt.Sprintf("%s takes a blow while down and dies.", c.Name)
+			return fmt.Sprintf("%s dies.", c.Name)
 		}
-		return fmt.Sprintf("%s takes a blow while down (death failures: %d/3).", c.Name, c.DeathFails)
-	}
-	if c.TempHP > 0 {
-		absorb := min(c.TempHP, n)
-		c.TempHP -= absorb
-		n -= absorb
+		return fmt.Sprintf("%s takes a blow while down (failures %d/3).", c.Name, c.DeathFails)
 	}
 	c.HP -= n
 	if c.HP <= 0 {
-		if -c.HP >= c.MaxHP { // massive damage
-			c.HP = 0
-			c.Dead = true
-			return fmt.Sprintf("%s is slain outright!", c.Name)
-		}
-		if c.Race == "half-orc" && !c.Relentless {
-			c.Relentless = true
-			c.HP = 1
-			return fmt.Sprintf("%s refuses to fall — Relentless Endurance leaves them at 1 HP!", c.Name)
-		}
 		c.HP = 0
-		c.Raging = false
-		return fmt.Sprintf("%s falls unconscious!", c.Name)
+		return fmt.Sprintf("%s goes down!", c.Name)
 	}
 	return ""
 }
 
-// DeathSave rolls a death saving throw for a downed character.
 func (c *Character) DeathSave() string {
 	r, _ := D20(0)
 	switch {
 	case r == 20:
 		c.HP = 1
 		c.DeathSaves, c.DeathFails = 0, 0
-		return fmt.Sprintf("%s rolls a natural 20 on a death save and springs back up with 1 HP!", c.Name)
+		return fmt.Sprintf("%s rolls a natural 20 and forces themself back up with 1 HP!", c.Name)
 	case r == 1:
 		c.DeathFails += 2
 	case r >= 10:
@@ -428,10 +424,9 @@ func (c *Character) DeathSave() string {
 		c.Stable = true
 		return fmt.Sprintf("%s rolls %d and stabilizes.", c.Name, r)
 	}
-	return fmt.Sprintf("%s rolls %d on a death save (successes %d/3, failures %d/3).", c.Name, r, c.DeathSaves, c.DeathFails)
+	return fmt.Sprintf("%s rolls %d on a death save (%d✔ %d✘).", c.Name, r, c.DeathSaves, c.DeathFails)
 }
 
-// GainXP adds experience and returns level-up messages.
 func (c *Character) GainXP(n int) []string {
 	if c.Dead {
 		return nil
@@ -439,43 +434,49 @@ func (c *Character) GainXP(n int) []string {
 	c.XP += n
 	var msgs []string
 	for c.Level < MaxLevel && c.XP >= XPThresholds[c.Level] {
+		oldGrade := c.Grade()
 		c.Level++
-		cl := c.ClassDef()
-		gain := cl.HitDie/2 + 1 + c.Mod("CON")
-		if c.Race == "dwarf" {
-			gain++
+		t := c.Tech()
+		gain := max(1, t.HitDie/2+1+c.Mod("CON"))
+		if c.Vessel {
+			gain += 2
 		}
-		gain = max(1, gain)
 		c.MaxHP += gain
 		c.HP += gain
-		oldSlots := c.SlotsMax
-		c.SlotsMax = SlotsFor(cl, c.Level)
-		c.Slots += c.SlotsMax - oldSlots
-		// Ability score improvement at 4, 8, 12: +2 to the primary ability.
 		if c.Level%4 == 0 {
-			p := cl.Priority[0]
+			p := t.Priority[0]
 			if c.Stats[p] < 20 {
 				c.Stats[p] = min(20, c.Stats[p]+2)
 			} else {
-				c.Stats[cl.Priority[1]] = min(20, c.Stats[cl.Priority[1]]+2)
+				c.Stats[t.Priority[1]] = min(20, c.Stats[t.Priority[1]]+2)
 			}
 			c.RecalcAC()
 		}
-		c.restoreUses(false)
-		msgs = append(msgs, fmt.Sprintf("⭐ %s reaches level %d! (+%d max HP)", c.Name, c.Level, gain))
+		old := c.CEMax
+		c.CEMax = c.CEMaxFor()
+		c.CE += c.CEMax - old
+		msg := fmt.Sprintf("⭐ %s reaches level %d! (+%d max HP)", c.Name, c.Level, gain)
+		if g := c.Grade(); g != oldGrade {
+			msg += fmt.Sprintf(" Jujutsu High promotes them to %s sorcerer.", g)
+		}
+		for _, a := range c.KnownAbilities() {
+			if a.MinLevel == c.Level {
+				msg += fmt.Sprintf(" New: %s.", a.Name)
+			}
+		}
+		msgs = append(msgs, msg)
 	}
 	return msgs
 }
 
-// NewCharacter builds a level 1 character.
-func NewCharacter(id, owner, name, raceID, classID string, base map[string]int, backstory string) (*Character, error) {
-	race, ok := Races[raceID]
+func NewCharacter(id, owner, name, originID, techID string, base map[string]int, backstory string, look Appearance) (*Character, error) {
+	origin, ok := Origins[originID]
 	if !ok {
-		return nil, fmt.Errorf("unknown race %q", raceID)
+		return nil, fmt.Errorf("unknown origin %q", originID)
 	}
-	cl, ok := Classes[classID]
+	tech, ok := Techniques[techID]
 	if !ok {
-		return nil, fmt.Errorf("unknown class %q", classID)
+		return nil, fmt.Errorf("unknown technique %q", techID)
 	}
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 40 {
@@ -483,49 +484,44 @@ func NewCharacter(id, owner, name, raceID, classID string, base map[string]int, 
 	}
 	stats := map[string]int{}
 	for _, ab := range Abilities {
-		stats[ab] = base[ab] + race.Bonus[ab]
+		stats[ab] = base[ab] + origin.Bonus[ab]
 	}
-	c := &Character{ID: id, Owner: owner, Name: name, Race: raceID, Class: classID, Level: 1, Stats: stats,
-		Gold: 10 + Die(10)*2, Features: slices.Clone(cl.Features), Skills: slices.Clone(cl.Skills),
-		Uses: map[string]int{}, Backstory: strings.TrimSpace(backstory)}
-	c.MaxHP = max(1, cl.HitDie+c.Mod("CON"))
-	if raceID == "dwarf" {
-		c.MaxHP++
+	skills := slices.Clone(tech.Skills)
+	if originID == "non_clan" {
+		for _, s := range []string{"perception", "persuasion", "athletics", "investigation"} {
+			if !slices.Contains(skills, s) {
+				skills = append(skills, s)
+				break
+			}
+		}
+	}
+	c := &Character{ID: id, Owner: owner, Name: name, Race: originID, Class: techID, Level: 1, Stats: stats,
+		Gold: 5000 + Die(10)*1000, Skills: skills, Backstory: strings.TrimSpace(backstory), Look: look,
+		Status: map[string]int{}, Used: map[string]int{}}
+	c.MaxHP = max(1, tech.HitDie+c.Mod("CON"))
+	if tech.NoCE {
+		c.MaxHP += 4
 	}
 	c.HP = c.MaxHP
-	c.SlotsMax = SlotsFor(cl, 1)
-	c.Slots = c.SlotsMax
-	for i, w := range cl.Weapons {
-		it, _ := NewItem(w)
-		it.Equipped = i == 0
-		c.AddItem(it)
+	c.CEMax = c.CEMaxFor()
+	c.CE = c.CEMax
+	if w, ok := NewItem(tech.Weapon); ok {
+		w.Equipped = true
+		c.AddItem(w)
 	}
-	if cl.Armor != "" && cl.Armor != "none" && cl.Armor != "unarmored_barb" {
-		it, _ := NewItem(cl.Armor)
-		it.Equipped = true
-		c.AddItem(it)
+	if a, ok := NewItem(tech.Armor); ok {
+		a.Equipped = true
+		c.AddItem(a)
 	}
-	if cl.Shield {
-		it, _ := NewItem("shield")
-		it.Equipped = true
-		c.AddItem(it)
-	}
-	for _, x := range append(slices.Clone(cl.ExtraItems), "torch", "rations", "rope") {
+	for _, x := range []string{"medicine", "medicine", "ce_tonic", "phone", "student_id"} {
 		it, _ := NewItem(x)
 		c.AddItem(it)
 	}
-	c.RecalcAC()
-	c.restoreUses(false)
-	return c, nil
-}
-
-// SkillLabel turns "sleight_of_hand" into "Sleight of Hand".
-func SkillLabel(key string) string {
-	words := strings.Split(key, "_")
-	for i, w := range words {
-		if w != "of" && w != "" {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
-		}
+	if techID == "cursed_speech" {
+		it, _ := NewItem("cough_syrup")
+		it.Qty = 2
+		c.AddItem(it)
 	}
-	return strings.Join(words, " ")
+	c.RecalcAC()
+	return c, nil
 }

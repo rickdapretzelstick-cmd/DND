@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"sort"
 	"sync"
 	"time"
 
@@ -14,23 +13,31 @@ import (
 )
 
 type Server struct {
-	eng     *engine.Engine
-	mux     *http.ServeMux
-	mu      sync.Mutex
-	clients map[chan []byte]struct{}
-	tokens  map[string]int
-	notify  chan struct{}
+	eng       *engine.Engine
+	mux       *http.ServeMux
+	mu        sync.Mutex
+	clients   map[chan []byte]struct{}
+	tokens    map[string]int
+	notify    chan struct{}
+	posNotify chan struct{}
 }
 
 func NewServer(eng *engine.Engine, static fs.FS) *Server {
-	s := &Server{eng: eng, mux: http.NewServeMux(), clients: map[chan []byte]struct{}{}, tokens: map[string]int{}, notify: make(chan struct{}, 1)}
+	s := &Server{eng: eng, mux: http.NewServeMux(), clients: map[chan []byte]struct{}{}, tokens: map[string]int{}, notify: make(chan struct{}, 1), posNotify: make(chan struct{}, 1)}
 	eng.OnChange = func() {
 		select {
 		case s.notify <- struct{}{}:
 		default:
 		}
 	}
+	eng.OnPos = func() {
+		select {
+		case s.posNotify <- struct{}{}:
+		default:
+		}
+	}
 	go s.broadcaster()
+	go s.posBroadcaster()
 
 	s.mux.Handle("/", http.FileServer(http.FS(static)))
 	s.mux.HandleFunc("/api/events", s.events)
@@ -109,6 +116,53 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 		var req struct{ Ability, Target string }
 		_ = json.Unmarshal(b, &req)
 		return eng.UseAbilityOutOfCombat(t, req.Ability, req.Target)
+	})
+	s.mux.HandleFunc("/api/world", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(eng.WorldJSON())
+	})
+	s.mux.HandleFunc("/api/move", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			X, Y   float64
+			Dir    int
+			Moving bool
+		}
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)
+		x, y, err := eng.Move(r.Header.Get("X-Token"), req.X, req.Y, req.Dir, req.Moving)
+		out := map[string]any{"x": x, "y": y}
+		if err != nil {
+			out["error"] = err.Error()
+		}
+		writeJSON(w, out)
+	})
+	dialogReply := func(w http.ResponseWriter, d *engine.Dialog, err error) {
+		if err != nil {
+			reply(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"dialog": d})
+	}
+	s.mux.HandleFunc("/api/interact", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ NPC string }
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req)
+		d, err := eng.Interact(r.Header.Get("X-Token"), req.NPC)
+		dialogReply(w, d, err)
+	})
+	s.mux.HandleFunc("/api/dialog", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Option string }
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req)
+		d, err := eng.ChooseDialog(r.Header.Get("X-Token"), req.Option)
+		dialogReply(w, d, err)
+	})
+	player("/api/talk", func(t string, b json.RawMessage) error {
+		var req struct{ NPC, Text string }
+		_ = json.Unmarshal(b, &req)
+		return eng.Talk(t, req.NPC, req.Text)
+	})
+	player("/api/choose", func(t string, b json.RawMessage) error {
+		var req struct{ Option string }
+		_ = json.Unmarshal(b, &req)
+		return eng.Choose(t, req.Option)
 	})
 	player("/api/combat", func(t string, b json.RawMessage) error {
 		var req engine.CombatReq
@@ -243,27 +297,41 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func sseFrame(event string, data []byte) []byte {
+	return []byte("event: " + event + "\ndata: " + string(data) + "\n\n")
+}
+
+func (s *Server) posBroadcaster() {
+	for range s.posNotify {
+		s.fanout(sseFrame("pos", s.eng.PosJSON()))
+		time.Sleep(90 * time.Millisecond)
+	}
+}
+
 func (s *Server) broadcaster() {
 	for range s.notify {
 		time.Sleep(40 * time.Millisecond) // coalesce bursts of changes
-		snap := s.eng.SnapshotJSON()
-		s.mu.Lock()
-		for ch := range s.clients {
+		s.fanout(sseFrame("state", s.eng.SnapshotJSON()))
+	}
+}
+
+func (s *Server) fanout(frame []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for ch := range s.clients {
+		select {
+		case ch <- frame:
+		default:
+			// A stuck client: drop its oldest frame to make room.
 			select {
-			case ch <- snap:
+			case <-ch:
 			default:
-				// Client is behind: replace its pending snapshot with the newest.
-				select {
-				case <-ch:
-				default:
-				}
-				select {
-				case ch <- snap:
-				default:
-				}
+			}
+			select {
+			case ch <- frame:
+			default:
 			}
 		}
-		s.mu.Unlock()
 	}
 }
 
@@ -276,7 +344,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Connection", "keep-alive")
-	ch := make(chan []byte, 1)
+	ch := make(chan []byte, 32)
 	s.mu.Lock()
 	s.clients[ch] = struct{}{}
 	s.mu.Unlock()
@@ -303,13 +371,13 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	send := func(b []byte) bool {
-		if _, err := fmt.Fprintf(w, "data: %s\n\n", b); err != nil {
+		if _, err := w.Write(b); err != nil {
 			return false
 		}
 		fl.Flush()
 		return true
 	}
-	if !send(s.eng.SnapshotJSON()) {
+	if !send(sseFrame("state", s.eng.SnapshotJSON())) || !send(sseFrame("pos", s.eng.PosJSON())) {
 		return
 	}
 	tick := time.NewTicker(20 * time.Second)
@@ -338,27 +406,28 @@ func (s *Server) tokenConnected(token string) bool {
 }
 
 func (s *Server) data(w http.ResponseWriter, r *http.Request) {
-	type classView struct {
-		engine.Class
+	type techView struct {
+		engine.Technique
 		Abilities []engine.Ability `json:"abilities"`
 	}
-	classes := []classView{}
-	for _, c := range engine.Classes {
-		cv := classView{Class: c}
-		for _, f := range c.Features {
-			cv.Abilities = append(cv.Abilities, engine.AbilityList[f])
+	var techs []techView
+	for _, id := range engine.SortedTechniqueIDs() {
+		t := engine.Techniques[id]
+		tv := techView{Technique: t}
+		for _, m := range t.Moves {
+			tv.Abilities = append(tv.Abilities, engine.AbilityList[m])
 		}
-		classes = append(classes, cv)
+		tv.Abilities = append(tv.Abilities, engine.AbilityList[t.Domain])
+		techs = append(techs, tv)
 	}
-	sort.Slice(classes, func(i, j int) bool { return classes[i].Name < classes[j].Name })
-	races := []engine.Race{}
-	for _, rc := range engine.Races {
-		races = append(races, rc)
+	origins := []engine.Origin{}
+	for _, id := range []string{"non_clan", "gojo", "zenin", "kamo", "inumaki", "half_curse"} {
+		origins = append(origins, engine.Origins[id])
 	}
-	sort.Slice(races, func(i, j int) bool { return races[i].Name < races[j].Name })
 	writeJSON(w, map[string]any{
-		"races": races, "classes": classes, "abilities": engine.AbilityList, "skills": engine.Skills,
-		"standardArray": engine.StandardArray, "abilityOrder": engine.Abilities, "xp": engine.XPThresholds,
+		"origins": origins, "techniques": techs, "abilities": engine.AbilityList, "skills": engine.Skills,
+		"standardArray": engine.StandardArray, "abilityOrder": engine.Abilities, "abilityNames": engine.AbilityNames,
+		"xp": engine.XPThresholds, "curses": engine.Bestiary, "items": engine.ItemList, "grades": engine.GradeNames,
 	})
 }
 

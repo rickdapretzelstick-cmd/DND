@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -26,6 +27,13 @@ import (
 var webFS embed.FS
 
 var version = "dev"
+
+func init() {
+	// Windows takes MIME types from the registry, which can break ES modules.
+	_ = mime.AddExtensionType(".js", "text/javascript; charset=utf-8")
+	_ = mime.AddExtensionType(".css", "text/css; charset=utf-8")
+	_ = mime.AddExtensionType(".html", "text/html; charset=utf-8")
+}
 
 func main() {
 	port := flag.Int("port", 0, "port to listen on (default 7777)")

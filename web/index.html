@@ -2,176 +2,178 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>D&amp;D Campaign Runner</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Jujutsu Chronicles</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <div class="logo">⚔ D&amp;D <span>Campaign Runner</span></div>
-  <div id="hdr-campaign"></div>
-  <div id="hdr-quest" class="grow"></div>
-  <span id="hdr-dm" class="badge"></span>
-  <span id="hdr-conn" class="badge"><span class="dot"></span><span>connecting</span></span>
-  <button id="btn-host" class="btn small hidden">⚙ Host</button>
-</header>
+<canvas id="cv"></canvas>
 
-<!-- join -->
-<section id="join" class="screen hidden">
-  <div class="hero">
-    <h1>🐉 Gather your party</h1>
-    <p>A self-running tabletop campaign. Everyone on the network joins from their own browser, makes a hero, and the Dungeon Master runs the rest.</p>
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div id="party-frames"></div>
+
+  <div id="topright">
+    <div id="clockbar"><span id="clock"></span><span id="dm-badge" class="badge"></span><span id="conn" class="badge"><i class="dot"></i></span></div>
+    <canvas id="minimap" width="168" height="168"></canvas>
+    <div id="tracker"></div>
   </div>
-  <div class="card">
-    <label for="join-name">Your name (the player, not the character)</label>
-    <input id="join-name" type="text" maxlength="30" placeholder="e.g. Sam" autocomplete="off">
-    <div class="row" style="margin-top:12px"><button id="btn-join" class="btn primary grow">Join the table</button></div>
+
+  <div id="spectate" class="hidden"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="story-card" class="hidden"></div>
+
+  <div id="log" class="collapsed">
+    <div id="log-head"><span>📜 Story log</span><button id="log-toggle" class="mini">▲</button></div>
+    <div id="log-lines"></div>
   </div>
-</section>
 
-<!-- character creation -->
-<section id="create" class="screen hidden">
-  <div class="card">
-    <div class="row"><h2 class="grow">Create your hero</h2><span class="muted small" id="create-who"></span></div>
-    <label for="cr-name">Character name</label>
-    <input id="cr-name" type="text" maxlength="40" placeholder="e.g. Thorin Ashbeard" autocomplete="off">
-
-    <label>Race</label>
-    <div id="cr-races" class="choice-grid"></div>
-
-    <label>Class</label>
-    <div id="cr-classes" class="choice-grid"></div>
-    <div id="cr-class-info" class="muted small" style="margin-top:6px"></div>
-
-    <label>Ability scores</label>
-    <div class="row" style="margin-bottom:8px">
-      <button class="btn small" id="cr-std">Standard array</button>
-      <button class="btn small" id="cr-roll">🎲 Roll 4d6 (drop lowest)</button>
-      <span class="muted small grow">Click two scores to swap them. Racial bonuses are added automatically.</span>
+  <div id="bar">
+    <div id="act-wrap">
+      <select id="act-mode" title="Who are you talking to?">
+        <option value="act">🎭 Do / say</option>
+        <option value="ooc">💬 Table chat</option>
+      </select>
+      <input id="act" type="text" maxlength="1000" placeholder="Press Enter, then type anything your character does…" autocomplete="off">
+      <button id="act-send" class="btn primary">Send</button>
     </div>
-    <div id="cr-stats" class="stats-grid"></div>
-
-    <label for="cr-back">Backstory (optional — the AI DM will weave it in)</label>
-    <textarea id="cr-back" rows="3" maxlength="1500" placeholder="Who are they? What do they want? What are they running from?"></textarea>
-    <div class="row" style="margin-top:14px">
-      <span id="cr-preview" class="muted small grow"></span>
-      <button id="btn-create" class="btn primary">Create character</button>
-    </div>
-  </div>
-</section>
-
-<!-- game -->
-<section id="game" class="hidden">
-  <div id="left" class="col">
-    <div class="panel">
-      <h2>The Party</h2>
-      <div id="party"></div>
-    </div>
-    <div class="panel">
-      <h3>At the table</h3>
-      <div id="players" class="small"></div>
+    <div id="bar-buttons">
+      <button class="btn" data-panel="sheet" title="Character (C)">🧑 <u>C</u>haracter</button>
+      <button class="btn" data-panel="quests" title="Quests (Q)">📜 <u>Q</u>uests</button>
+      <button class="btn" data-panel="map" title="Map (M)">🗺️ <u>M</u>ap</button>
+      <button class="btn hidden" id="btn-host" title="Host controls">⚙ Host</button>
     </div>
   </div>
 
-  <div id="center" class="col">
-    <div id="story" class="panel">
-      <div id="scene"><div class="loc" id="scene-loc"></div><div class="muted small" id="scene-desc"></div></div>
-      <div id="log"></div>
-      <div id="thinking" class="hidden">The Dungeon Master is thinking</div>
-      <div id="composer">
-        <div class="tabs">
-          <button class="tab sel" data-mode="act">🎭 Action</button>
-          <button class="tab" data-mode="ooc">💬 Table talk</button>
-          <span class="grow"></span>
-          <div class="dice" id="dice"></div>
-        </div>
-        <div class="row" style="align-items:stretch; flex-wrap:nowrap">
-          <textarea id="msg" class="grow" rows="2" placeholder="What does your character do?"></textarea>
-          <button id="btn-send" class="btn primary">Send</button>
-        </div>
-        <div id="start-hint" class="muted small hidden" style="margin-top:6px"></div>
+  <div id="battle-ui" class="hidden">
+    <div id="turn-order"></div>
+    <div id="battle-ticker"></div>
+    <div id="battle-menu"></div>
+  </div>
+
+  <div id="dialog" class="hidden">
+    <canvas id="dialog-portrait" width="96" height="144"></canvas>
+    <div id="dialog-body">
+      <div id="dialog-name"></div>
+      <div id="dialog-text"></div>
+      <div id="dialog-options"></div>
+      <div id="dialog-free" class="hidden">
+        <input id="dialog-input" type="text" maxlength="800" placeholder="Say or do anything…" autocomplete="off">
+        <button id="dialog-send" class="btn primary">Say</button>
       </div>
     </div>
+    <button id="dialog-close" class="mini">✕</button>
   </div>
 
-  <div id="right" class="col">
-    <div id="combat" class="panel hidden"></div>
-    <div id="sheet" class="panel"></div>
+  <div id="choice" class="hidden">
+    <div class="choice-card">
+      <div id="choice-speaker"></div>
+      <h2 id="choice-title"></h2>
+      <p id="choice-text"></p>
+      <div id="choice-options"></div>
+      <p class="muted small">Anyone in the party can decide. Talk it over in table chat first!</p>
+    </div>
+  </div>
+
+  <div id="panel" class="hidden">
+    <button id="panel-close" class="mini">✕</button>
+    <div id="panel-body"></div>
+  </div>
+
+  <div id="dpad" class="hidden">
+    <button data-k="up">▲</button><button data-k="left">◀</button><button data-k="e">E</button><button data-k="right">▶</button><button data-k="down">▼</button>
+  </div>
+</div>
+
+<!-- ============ Join ============ -->
+<section id="join" class="screen hidden">
+  <div class="title-card">
+    <div class="kanji">呪術</div>
+    <h1>Jujutsu Chronicles</h1>
+    <p>A self-running multiplayer jujutsu RPG. Walk the world, exorcise curses, master your cursed technique — and decide what kind of sorcerer you'll be.</p>
+    <label for="join-name">Your name (the player)</label>
+    <input id="join-name" type="text" maxlength="30" placeholder="e.g. Sam" autocomplete="off">
+    <button id="btn-join" class="btn primary big">Enter</button>
   </div>
 </section>
 
-<!-- host modal -->
+<!-- ============ Creator ============ -->
+<section id="create" class="screen hidden">
+  <div class="creator">
+    <div class="creator-left">
+      <h2>Your sorcerer</h2>
+      <canvas id="preview" width="192" height="288"></canvas>
+      <div class="row center"><button class="mini" id="rot-l">⟲</button><button class="mini" id="randomize">🎲 Randomize</button><button class="mini" id="rot-r">⟳</button></div>
+      <div id="look-controls"></div>
+    </div>
+    <div class="creator-right">
+      <label for="cr-name">Name</label>
+      <input id="cr-name" type="text" maxlength="40" placeholder="e.g. Haruka Itsuki" autocomplete="off">
+      <label>Clan / origin</label>
+      <div id="cr-origins" class="cards"></div>
+      <label>Innate cursed technique</label>
+      <div id="cr-techs" class="cards techs"></div>
+      <div id="cr-tech-info" class="tech-info"></div>
+      <label>Abilities <span class="muted small">— click two to swap. <button class="mini" id="cr-std">Standard</button> <button class="mini" id="cr-roll">🎲 Roll 4d6</button></span></label>
+      <div id="cr-stats" class="stats"></div>
+      <label for="cr-back">Backstory <span class="muted small">(the AI DM weaves it into the story)</span></label>
+      <textarea id="cr-back" rows="3" maxlength="1500" placeholder="Why can you see curses? Who did you lose? What do you want?"></textarea>
+      <div class="row"><span id="cr-preview" class="muted small grow"></span><button id="btn-create" class="btn primary big">Awaken ✦</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Host ============ -->
 <div id="host-modal" class="modal-bg hidden">
   <div class="modal">
-    <button class="btn small close" id="host-close">✕</button>
+    <button class="mini close" id="host-close">✕</button>
     <h2>Host controls</h2>
-    <p class="muted small">Only the computer running the program sees this.</p>
-
     <h3>Invite players</h3>
-    <div id="host-links" class="links small"></div>
-
-    <h3 style="margin-top:14px">Table</h3>
-    <div class="hostbar">
-      <button class="btn primary" id="h-start">🐉 Begin adventure</button>
-      <button class="btn" id="h-skip">⏭ Skip current turn</button>
-      <button class="btn" id="h-short">☕ Short rest</button>
-      <button class="btn" id="h-long">🌙 Long rest</button>
+    <div id="host-links" class="small"></div>
+    <h3>Story</h3>
+    <div class="row wrap">
+      <button class="btn primary" id="h-start">🌸 Begin the story</button>
+      <button class="btn" id="h-skip">⏭ Skip current battle turn</button>
+      <button class="btn" id="h-long">🌙 Long rest (everyone)</button>
     </div>
-
-    <h3 style="margin-top:14px">Dungeon Master</h3>
-    <div class="row">
-      <label class="grow" style="margin:0">DM mode for this campaign
-        <select id="h-mode">
-          <option value="ai">🧠 AI Dungeon Master (Claude)</option>
-          <option value="offline">🎲 Offline Dungeon Master (no internet needed)</option>
-        </select>
-      </label>
-    </div>
-    <label for="h-key">Anthropic API key <span id="h-keyhint"></span></label>
+    <h3>Dungeon Master</h3>
+    <label>Mode<select id="h-mode">
+      <option value="ai">🧠 AI Dungeon Master — players can do literally anything</option>
+      <option value="offline">🎲 Offline Dungeon Master — no internet, common actions only</option>
+    </select></label>
+    <label for="h-key">Anthropic API key <span id="h-keyhint" class="muted"></span></label>
     <input id="h-key" type="password" placeholder="sk-ant-… (stored only on this computer)" autocomplete="off">
-    <p class="muted small">Get one at <b>console.anthropic.com</b> → API Keys. Without a key, the offline DM runs the game.</p>
+    <p class="muted small">Get one at <b>console.anthropic.com</b> → API Keys. The AI DM is what lets players ask anything, take any job, befriend or betray anyone.</p>
     <div class="row">
-      <label class="grow" style="margin:0">Model
-        <select id="h-model">
-          <option value="claude-opus-5-5">Claude Opus 5.5 (best storytelling)</option>
-          <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (faster, cheaper)</option>
-          <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest, cheapest)</option>
-          <option value="claude-fable-5-1">Claude Fable 5.1 (most capable, slowest)</option>
-        </select>
-      </label>
-      <label class="grow" style="margin:0">Thinking effort
-        <select id="h-effort">
-          <option value="low">Low (fast replies)</option>
-          <option value="medium">Medium</option>
-          <option value="high">High (deeper, slower)</option>
-        </select>
-      </label>
+      <label class="grow">Model<select id="h-model">
+        <option value="claude-opus-5-5">Claude Opus 5.5 (best storytelling)</option>
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (faster, cheaper)</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest, cheapest)</option>
+        <option value="claude-fable-5-1">Claude Fable 5.1 (most capable, slowest)</option>
+      </select></label>
+      <label class="grow">Thinking effort<select id="h-effort">
+        <option value="low">Low (snappy)</option>
+        <option value="medium">Medium</option>
+        <option value="high">High (deeper, slower)</option>
+      </select></label>
     </div>
-    <label for="h-setting">Setting &amp; tone notes for the DM</label>
-    <textarea id="h-setting" rows="3" placeholder="e.g. Grimdark sword &amp; sorcery in a frozen north. Lots of political intrigue. Keep it PG-13."></textarea>
-    <div class="row" style="margin-top:8px"><button class="btn primary" id="h-save">Save DM settings</button></div>
-
-    <h3 style="margin-top:18px">Campaigns</h3>
+    <label for="h-setting">Tone notes for the DM</label>
+    <textarea id="h-setting" rows="2" placeholder="e.g. More horror, fewer jokes. Kyoto arc focus. Keep it PG-13."></textarea>
+    <div class="row"><button class="btn primary" id="h-save">Save DM settings</button></div>
+    <h3>Campaigns</h3>
     <div id="h-camps"></div>
     <details>
-      <summary>Start a new campaign</summary>
-      <label for="h-new-name">Campaign name</label>
-      <input id="h-new-name" type="text" placeholder="e.g. The Curse of Duskhollow">
-      <label for="h-new-setting">Setting &amp; tone (optional)</label>
-      <textarea id="h-new-setting" rows="2"></textarea>
-      <label for="h-new-mode">Dungeon Master</label>
-      <select id="h-new-mode">
-        <option value="ai">🧠 AI Dungeon Master (needs API key)</option>
-        <option value="offline">🎲 Offline Dungeon Master</option>
-      </select>
-      <div class="row" style="margin-top:8px"><button class="btn primary" id="h-new">Create &amp; switch</button></div>
-      <p class="muted small">The current campaign is saved automatically. Everyone at the table moves to the new one and makes new characters.</p>
+      <summary>Start a new campaign (new world)</summary>
+      <label>Name<input id="h-new-name" type="text" placeholder="e.g. The Culling Game"></label>
+      <label>Tone notes<textarea id="h-new-setting" rows="2"></textarea></label>
+      <label>DM<select id="h-new-mode"><option value="ai">🧠 AI</option><option value="offline">🎲 Offline</option></select></label>
+      <button class="btn primary" id="h-new">Create &amp; switch</button>
     </details>
   </div>
 </div>
 
 <div id="toast" class="hidden"></div>
-<script src="app.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
