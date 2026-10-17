@@ -171,7 +171,7 @@ func (e *Engine) questEvent(kind string, ch *Character, arg string) {
 func (e *Engine) stepMet(q *Quest, st *QuestStep, kind string, ch *Character, arg string) bool {
 	switch st.Type {
 	case "goto":
-		return kind == "arrive" && ch != nil && math.Hypot(ch.X-float64(st.X), ch.Y-float64(st.Y)) < 3.5
+		return kind == "arrive" && ch != nil && math.Hypot(ch.X-float64(st.X), ch.Y-float64(st.Y)) < arriveRange
 	case "defeat":
 		return kind == "victory" && arg == q.ID
 	case "talk":

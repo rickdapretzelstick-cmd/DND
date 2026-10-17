@@ -1,4 +1,5 @@
 import { curseSprite } from "./curses.js";
+import { findPath } from "./path.js";
 import { TILE, charSprite, makeCanvas, SKIN, HAIR_STYLES, OUTFITS, ACCESSORIES, BUILDS } from "./pixel.js";
 import { WorldView, drawCharacter, drawCurseEntity, nameplate, marker, bubble, drawLighting } from "./world.js";
 import { BattleView } from "./battle.js";
@@ -27,6 +28,31 @@ const bubbles = new Map(); // name -> {text, t0, dur, kind}
 let dialog = null;
 let watchBattle = false;
 let battleTarget = "";
+let trackedId = localStorage.getItem("jjk_tracked") || "";
+let waypoint = null;           // {x, y} set by clicking the map
+let showRoute = localStorage.getItem("jjk_route") !== "0";
+let routeCache = { key: "", pts: null, t: 0 };
+
+// What the compass and route point at: a map waypoint, the tracked quest, or the nearest active quest.
+function toggleRoute() { showRoute = !showRoute; localStorage.setItem("jjk_route", showRoute ? "1" : "0"); toast(showRoute ? "Route guide on" : "Route guide off"); renderHUD(); }
+
+function currentTarget() {
+  const mine = myChar();
+  const me = mine && ents.get(mine.id);
+  if (!me) return null;
+  if (waypoint) return { x: waypoint.x, y: waypoint.y, label: "Waypoint", kind: "wp" };
+  const mineQ = (S.quests || []).filter((q) => (q.stage === "active" || q.stage === "return") && (!q.for || q.for === mine.id));
+  const pos = (q) => {
+    if (q.stage === "return") { const g = npcList().find((n) => n.id === q.giver); return g ? { x: g.x, y: g.y } : { x: q.x, y: q.y }; }
+    return { x: q.x + 0.5, y: q.y + 0.5 };
+  };
+  let q = mineQ.find((x) => x.id === trackedId);
+  if (!q) { let bd = 1e9; for (const x of mineQ) { const p = pos(x), d = Math.hypot(p.x - me.x, p.y - me.y); if (d < bd) { bd = d; q = x; } } }
+  if (!q) return null;
+  const p = pos(q);
+  return { x: p.x, y: p.y, label: q.stage === "return" ? "Report to " + (q.giverName || "giver") : q.objective, kind: q.kind, quest: q };
+}
+
 let storyQueue = [];
 let storyTimer = 0;
 let panel = "";
@@ -247,15 +273,28 @@ function renderHUD() {
   $("#dm-badge").textContent = S.ai ? (S.model?.startsWith("ollama:") ? "🖥️ Local AI DM" : "🧠 AI DM") : "🎲 Offline DM";
   $("#dm-badge").title = S.ai ? "The AI Dungeon Master is narrating — do anything." : "Offline DM. The host can enable the AI DM for free-form play.";
   // Tracker
-  const active = S.quests.filter((q) => q.stage === "active" || q.stage === "return");
+  const active = S.quests.filter((q) => (q.stage === "active" || q.stage === "return") && (!q.for || q.for === mine?.id));
   const me0 = ents.get(mine?.id);
   const dir8 = (dx, dy) => ["E", "SE", "S", "SW", "W", "NW", "N", "NE"][Math.round(((Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
-  $("#tracker").innerHTML = active.length ? active.map((q) => {
-    const dist = me0 ? Math.round(Math.hypot(q.x - me0.x, q.y - me0.y)) : 0;
-    const where = me0 && q.stage === "active" ? `<span class="where">${dist < 4 ? "here" : dist + " tiles " + dir8(q.x - me0.x, q.y - me0.y)}</span>` : "";
-    const steps = (q.steps || []).length ? `<ol class="steps">${q.steps.map((st, i) => `<li class="${st.done ? "done" : q.steps.findIndex((x) => !x.done) === i ? "now" : ""}">${st.done ? "✔" : q.steps.findIndex((x) => !x.done) === i ? "➤" : "·"} ${esc(st.text)}</li>`).join("")}</ol>` : `<div>${esc(q.objective)}</div>`;
-    return `<div class="q ${q.kind}"><b>${esc(q.title)}</b><span class="st">${q.stage === "return" ? "Report to " + esc(q.giverName || "giver") : "Active"}</span> ${where}${steps}</div>`;
-  }).join("") : `<div class="muted">${S.started ? "No active quests. Talk to people — ask around, offer to help, or just try something." : "Waiting for the host to begin the story…"}</div>`;
+  const tg = currentTarget();
+  const hot = tg?.quest?.id;
+  let tHtml = active.length ? active.map((q) => {
+    const tx = q.stage === "return" ? (npcList().find((n) => n.id === q.giver) || q) : { x: q.x, y: q.y };
+    const dist = me0 ? Math.round(Math.hypot(tx.x - me0.x, tx.y - me0.y)) : 0;
+    const where = me0 ? `<span class="where">${dist < 6 ? "here" : dist + " m " + dir8(tx.x - me0.x, tx.y - me0.y)}</span>` : "";
+    const cur = (q.steps || []).findIndex((x) => !x.done);
+    const steps = (q.steps || []).length ? `<ol class="steps">${q.steps.map((st, i) => `<li class="${st.done ? "done" : cur === i ? "now" : ""}">${st.done ? "✔" : cur === i ? "➤" : "·"} ${esc(st.text)}</li>`).join("")}</ol>` : `<div>${esc(q.objective)}</div>`;
+    return `<div class="q ${q.kind} ${hot === q.id ? "tracked" : ""}" data-q="${q.id}" title="Click to track this quest"><b>${hot === q.id ? "◎ " : ""}${esc(q.title)}</b><span class="st">${q.stage === "return" ? "Report to " + esc(q.giverName || "giver") : "Active"}</span> ${where}${steps}</div>`;
+  }).join("") : "";
+  if (!active.length && me0) {
+    const jobs = npcList().filter((n) => S.markers?.[n.id] === "+" || S.markers?.[n.id] === "!").map((n) => ({ n, d: Math.hypot(n.x - me0.x, n.y - me0.y) })).sort((a, b) => a.d - b.d)[0];
+    tHtml = S.started ? `<div class="muted">No active quests.${jobs ? `<br><b style="color:#ffd166">${S.markers[jobs.n.id] === "!" ? "❗" : "➕"} ${esc(jobs.n.name)}</b> needs someone — ${Math.round(jobs.d)} m ${dir8(jobs.n.x - me0.x, jobs.n.y - me0.y)}.` : ""}<br>Ask anyone “any odd jobs?”, or open the Map (M) to see who's hiring.</div>` : `<div class="muted">Waiting for the host to begin the story…</div>`;
+  }
+  tHtml += `<div class="trkbar"><button class="mini" id="trk-route">${showRoute ? "🧭 Route: on" : "🧭 Route: off"} (G)</button>${waypoint ? '<button class="mini" id="trk-wp">✖ Clear waypoint</button>' : ""}</div>`;
+  $("#tracker").innerHTML = tHtml;
+  $$("#tracker [data-q]").forEach((el) => (el.onclick = () => { trackedId = el.dataset.q; waypoint = null; localStorage.setItem("jjk_tracked", trackedId); routeCache.key = ""; renderHUD(); }));
+  const tr = $("#trk-route"); if (tr) tr.onclick = toggleRoute;
+  const tw = $("#trk-wp"); if (tw) tw.onclick = () => { waypoint = null; routeCache.key = ""; renderHUD(); };
   // Battle UI
   renderBattleUI();
   maybeShowResults();
@@ -552,7 +591,7 @@ function renderPanel() {
       <div class="small muted">${q.giverName ? "From " + esc(q.giverName) + " · " : ""}Reward: ${q.rewardXp} XP, ${yen(q.rewardYen)}${q.minLevel > 1 ? " · Recommended level " + q.minLevel : ""}</div></div>`).join("") : '<p class="muted">No quests yet.</p>'}
       <h3>Journal</h3>${S.journal?.length ? `<ul>${S.journal.map((j) => `<li class="small">${esc(j)}</li>`).join("")}</ul>` : '<p class="muted small">Your story is just beginning.</p>'}`;
   } else if (panel === "map") {
-    body.innerHTML = `<h2>🗺️ Map</h2><canvas id="bigmap"></canvas><p class="muted small">◆ you · ● party · ! quest · ☠ cursed site · Towns you've visited are named. Ijichi at Jujutsu High can drive you to any visited town.</p>`;
+    body.innerHTML = `<h2>🗺️ Map</h2><canvas id="bigmap"></canvas><p class="muted small">Click a ! to track that quest, a ➕ person to head there, or anywhere to drop a waypoint — a dotted route then leads the way (G toggles it). ◆ quest · ● yellow = you · ☠ cursed site (colour = danger) · Ijichi can drive you to any visited town.</p>`;
     drawBigMap($("#bigmap"));
   } else {
     body.innerHTML = "";
@@ -567,41 +606,77 @@ function itemInfo(it) {
   return it.desc || it.kind;
 }
 
+let bigMapGeom = null;
 function drawBigMap(cv) {
   if (!world) return;
-  const W = world.w.w, H = world.w.h, s = 4;
+  const W = world.w.w, H = world.w.h, s = 1.5;
   cv.width = W * s; cv.height = H * s;
   const ctx = cv.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true;
   ctx.drawImage(world.minimap, 0, 0, W * s, H * s);
-  ctx.font = "bold 13px system-ui";
   ctx.textAlign = "center";
+  const pins = [];
+  const label = (txt, x, y, col, size = 13) => {
+    ctx.font = `bold ${size}px system-ui`;
+    const tw = ctx.measureText(txt).width;
+    ctx.fillStyle = "rgba(0,0,0,0.65)"; ctx.fillRect(x - tw / 2 - 4, y - size - 2, tw + 8, size + 5);
+    ctx.fillStyle = col; ctx.fillText(txt, x, y - 2);
+  };
   for (const s2 of world.w.sites) {
-    ctx.fillStyle = S.cleared?.[s2.id] ? "#adb5bd" : "#c77dff";
-    ctx.fillText("☠", s2.x * s, s2.y * s);
+    const known = S.discovered?.[s2.town];
+    const col = S.cleared?.[s2.id] ? "#adb5bd" : ["#b7e4c7", "#e0aaff", "#ffd166", "#ff9e6d"][s2.rank] || "#c77dff";
+    ctx.font = "bold 20px system-ui"; ctx.fillStyle = "#000"; ctx.fillText("☠", s2.x * s + 1, s2.y * s + 8); ctx.fillStyle = col; ctx.fillText("☠", s2.x * s, s2.y * s + 7);
+    if (known) label(s2.name.replace(/^(Derelict|Abandoned|Haunted|Old|The)\s+/, ""), s2.x * s, s2.y * s - 12, col, 11);
   }
   for (const t of world.w.towns) {
     const known = S.discovered?.[t.id];
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    const label = known ? t.name : "???";
-    const tw = ctx.measureText(label).width;
-    ctx.fillRect(t.x * s - tw / 2 - 4, t.y * s - 30, tw + 8, 17);
-    ctx.fillStyle = S.burned?.includes(t.id) ? "#ff7b00" : "#fff";
-    ctx.fillText(label, t.x * s, t.y * s - 17);
+    label(known ? t.name : "???", t.x * s, t.y * s - t.r * s * 0.15 - 6, S.burned?.includes(t.id) ? "#ff7b00" : "#fff", 14);
   }
+  // people who are hiring / quest givers
+  for (const n of npcList()) {
+    const mk = S.markers?.[n.id];
+    if (!mk) continue;
+    ctx.fillStyle = mk === "?" ? "#4cc9f0" : "#ffd60a";
+    ctx.beginPath(); ctx.arc(n.x * s, n.y * s, 5, 0, 7); ctx.fill(); ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = "bold 11px system-ui"; ctx.fillStyle = "#000"; ctx.fillText(mk, n.x * s, n.y * s + 4);
+    pins.push({ x: n.x * s, y: n.y * s, n });
+  }
+  const tg = currentTarget();
   for (const q of S.quests) {
-    if (q.stage !== "active") continue;
-    ctx.fillStyle = q.kind === "main" ? "#ff4d6d" : "#ffd60a";
-    ctx.font = "bold 22px system-ui";
-    ctx.fillText("!", q.x * s, q.y * s);
+    if (q.stage !== "active" && q.stage !== "return") continue;
+    if (q.for && q.for !== myChar().id) continue;
+    const g = q.stage === "return" ? npcList().find((n) => n.id === q.giver) : null;
+    const qx = (g ? g.x : q.x + 0.5) * s, qy = (g ? g.y : q.y + 0.5) * s;
+    const hot = tg?.quest?.id === q.id;
+    const r = hot ? 11 : 8;
+    ctx.save(); ctx.translate(qx, qy); ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = q.kind === "main" ? "#ff4d6d" : "#ffd60a"; ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+    ctx.fillRect(-r, -r, r * 2, r * 2); ctx.strokeRect(-r, -r, r * 2, r * 2); ctx.restore();
+    ctx.fillStyle = "#000"; ctx.font = "bold 13px system-ui"; ctx.fillText("!", qx, qy + 5);
+    label(q.title, qx, qy - r - 8, hot ? "#fff" : "#ffe08a", 12);
+    pins.push({ x: qx, y: qy, q });
   }
+  if (waypoint) { ctx.fillStyle = "#7dd3fc"; ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(waypoint.x * s, waypoint.y * s, 8, 0, 7); ctx.stroke(); ctx.fill(); label("Waypoint", waypoint.x * s, waypoint.y * s - 14, "#7dd3fc", 12); }
   for (const c of S.characters) {
     const e = ents.get(c.id) || c;
-    ctx.fillStyle = c.id === myChar().id ? "#ffd166" : "#4cc9f0";
-    ctx.beginPath(); ctx.arc(e.x * s, e.y * s, c.id === myChar().id ? 7 : 5, 0, 7); ctx.fill();
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
+    const me = c.id === myChar().id;
+    ctx.fillStyle = me ? "#ffd166" : "#4cc9f0";
+    ctx.beginPath(); ctx.arc(e.x * s, e.y * s, me ? 8 : 6, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.stroke();
   }
   ctx.textAlign = "left";
+  bigMapGeom = { s, pins };
+  cv.onclick = (ev) => {
+    const r = cv.getBoundingClientRect(), k = cv.width / r.width;
+    const mx = (ev.clientX - r.left) * k, my = (ev.clientY - r.top) * k;
+    let best = null, bd = 18 * k;
+    for (const p of bigMapGeom.pins) { const d = Math.hypot(p.x - mx, p.y - my); if (d < bd) { bd = d; best = p; } }
+    if (best?.q) { trackedId = best.q.id; waypoint = null; localStorage.setItem("jjk_tracked", trackedId); toast("Tracking: " + best.q.title); }
+    else if (best?.n) { waypoint = { x: best.n.x, y: best.n.y }; toast("Waypoint set on " + best.n.name); }
+    else { waypoint = { x: mx / bigMapGeom.s, y: my / bigMapGeom.s }; toast("Waypoint set — follow the dotted route (G toggles it)"); }
+    routeCache.key = "";
+    renderHUD(); drawBigMap(cv);
+  };
 }
 
 // ---------- character creator ----------
@@ -715,6 +790,7 @@ addEventListener("keydown", (e) => {
   if (k === "c") togglePanel("sheet");
   if (k === "q") togglePanel("quests");
   if (k === "m") togglePanel("map");
+  if (k === "g") toggleRoute();
   if (k === "l") $("#log-head").click();
 });
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
@@ -865,33 +941,48 @@ function frame(now) {
   }
   world.clock = clock;
   const view = world.draw(ctx, W, H, cam, zoom, now, list);
-  // Objective compass: an arrow at the screen edge toward the nearest active quest target.
+  // Route guide + objective compass toward the tracked quest (or waypoint).
   {
-    let best = null, bd = 1e9;
-    for (const q of S.quests) {
-      if (q.stage !== "active" || (q.owner && q.owner !== mine.id)) continue;
-      if (q.for && q.for !== mine.id) continue;
-      const d = Math.hypot(q.x - me2.x, q.y - me2.y);
-      if (d < bd) { bd = d; best = q; }
-    }
-    if (best && bd > 3) {
-      const [qx, qy] = view.toScreen(best.x + 0.5, best.y + 0.5);
-      const pad = 54, onscreen = qx > pad && qx < W - pad && qy > pad && qy < H - pad;
-      if (!onscreen) {
-        const cx = W / 2, cy = H / 2, ang = Math.atan2(qy - cy, qx - cx);
-        const k = Math.min((W / 2 - pad) / Math.abs(Math.cos(ang) || 1e-6), (H / 2 - pad) / Math.abs(Math.sin(ang) || 1e-6));
-        const ax = cx + Math.cos(ang) * k, ay = cy + Math.sin(ang) * k;
-        ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
-        const pulse = 0.75 + 0.25 * Math.sin(now / 250);
-        ctx.fillStyle = best.kind === "main" ? `rgba(255,77,109,${pulse})` : `rgba(255,214,10,${pulse})`;
-        ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -12); ctx.lineTo(-4, 0); ctx.lineTo(-10, 12); ctx.closePath(); ctx.stroke(); ctx.fill();
-        ctx.restore();
-        ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
-        const label = `${Math.round(bd)}`;
-        ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(label, ax - Math.cos(ang) * 24, ay - Math.sin(ang) * 24 + 4);
-        ctx.fillStyle = "#fff"; ctx.fillText(label, ax - Math.cos(ang) * 24, ay - Math.sin(ang) * 24 + 4);
-        ctx.textAlign = "left";
+    const tg = currentTarget();
+    if (tg) {
+      const bd = Math.hypot(tg.x - me2.x, tg.y - me2.y);
+      if (showRoute && bd > 6) {
+        const key = Math.round(tg.x) + "," + Math.round(tg.y);
+        if (routeCache.key !== key || now - routeCache.t > 2500 || (routeCache.from && Math.hypot(routeCache.from[0] - me2.x, routeCache.from[1] - me2.y) > 6)) {
+          routeCache = { key, t: now, from: [me2.x, me2.y], pts: findPath((x, y) => world.at(x, y), world.w.w, world.w.h, me2.x, me2.y, tg.x, tg.y) };
+        }
+        const pts = routeCache.pts;
+        if (pts && pts.length > 1) {
+          ctx.save();
+          ctx.lineCap = "round"; ctx.lineJoin = "round";
+          const col = tg.kind === "main" ? "255,77,109" : tg.kind === "wp" ? "125,211,252" : "255,214,10";
+          const scr = pts.map(([x, y]) => view.toScreen(x, y));
+          ctx.beginPath(); scr.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.setLineDash([2 * zoom, 7 * zoom]); ctx.lineDashOffset = -now / 40;
+          ctx.strokeStyle = "rgba(0,0,0,0.45)"; ctx.lineWidth = 5 * zoom * 0.7; ctx.stroke();
+          ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 3 * zoom * 0.7; ctx.stroke();
+          ctx.restore();
+        }
+      }
+      if (bd > 6) {
+        const [qx, qy] = view.toScreen(tg.x, tg.y);
+        const pad = 54, onscreen = qx > pad && qx < W - pad && qy > pad && qy < H - pad;
+        if (!onscreen) {
+          const cx = W / 2, cy = H / 2, ang = Math.atan2(qy - cy, qx - cx);
+          const k = Math.min((W / 2 - pad) / Math.abs(Math.cos(ang) || 1e-6), (H / 2 - pad) / Math.abs(Math.sin(ang) || 1e-6));
+          const ax = cx + Math.cos(ang) * k, ay = cy + Math.sin(ang) * k;
+          ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
+          const pulse = 0.75 + 0.25 * Math.sin(now / 250);
+          ctx.fillStyle = tg.kind === "main" ? `rgba(255,77,109,${pulse})` : tg.kind === "wp" ? `rgba(125,211,252,${pulse})` : `rgba(255,214,10,${pulse})`;
+          ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -12); ctx.lineTo(-4, 0); ctx.lineTo(-10, 12); ctx.closePath(); ctx.stroke(); ctx.fill();
+          ctx.restore();
+          ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
+          const label = `${Math.round(bd)} m`;
+          ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(label, ax - Math.cos(ang) * 28, ay - Math.sin(ang) * 28 + 4);
+          ctx.fillStyle = "#fff"; ctx.fillText(label, ax - Math.cos(ang) * 28, ay - Math.sin(ang) * 28 + 4);
+          ctx.textAlign = "left";
+        }
       }
     }
   }
@@ -937,7 +1028,7 @@ function drawMinimap(me2) {
   const c = $("#minimap");
   const x = c.getContext("2d");
   x.imageSmoothingEnabled = true;
-  const R = 42; // tiles shown each way
+  const R = 100; // tiles shown each way
   x.fillStyle = "#0b1a3a";
   x.fillRect(0, 0, c.width, c.height);
   const s = c.width / (R * 2);

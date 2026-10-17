@@ -394,9 +394,19 @@ func (e *Engine) dialogAction(ch *Character, n *NPC, act string, ctx *dialogCtx)
 
 func (e *Engine) rumor(n *NPC) string {
 	var opts []string
+	// Pointers to real things the player can go and do.
+	if w, d := e.jobHint(n.X, n.Y); w != nil && w.ID != n.ID {
+		where := ""
+		if t := e.W.InTown(w.X, w.Y); t != nil {
+			where = " in " + t.Name
+		}
+		opts = append(opts, fmt.Sprintf("%s%s is looking for an extra pair of hands, about %d m %s of here. Pays in more than yen, I hear.", w.Name, where, int(d), compass(w.X-n.X, w.Y-n.Y)))
+		opts = append(opts, fmt.Sprintf("If you want work, go ask %s. %s's been run off their feet lately.", w.Name, strings.Fields(w.Name)[0]))
+	}
 	for _, s := range e.W.Sites {
-		if s.Town == n.Town || n.Town == "" {
-			opts = append(opts, fmt.Sprintf("They say people who go near the %s don't come back the same. %s-level stuff, if you ask me.", s.Name, GradeNames[s.Rank]))
+		if (s.Town == n.Town || n.Town == "") && !e.C.Cleared[s.ID] {
+			d := math.Hypot(float64(s.X)-n.X, float64(s.Y)-n.Y)
+			opts = append(opts, fmt.Sprintf("They say people who go near the %s, about %d m %s of here, don't come back the same. %s-level stuff, if you ask me.", s.Name, int(d), compass(float64(s.X)-n.X, float64(s.Y)-n.Y), GradeNames[s.Rank]))
 		}
 	}
 	for _, q := range e.C.Quests {
@@ -409,6 +419,10 @@ func (e *Engine) rumor(n *NPC) string {
 		"Night's when the nasty ones come out. Stick to the roads.",
 		"A man with stitches across his forehead was asking about 'the vessel'. Gave me the creeps.",
 		"Somebody saw a white-haired guy with a blindfold eating crepes at three in the morning. Weird city.")
+	// Prefer something actionable when there is one.
+	if len(opts) > 4 && chance(0.6) {
+		opts = opts[:len(opts)-4]
+	}
 	return pickS(rngTL(), opts)
 }
 

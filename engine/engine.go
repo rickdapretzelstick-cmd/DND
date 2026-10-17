@@ -583,6 +583,9 @@ func (e *Engine) npcMarkers() map[string]string {
 		if n.Role == "elder" && e.questFrom(n.ID, "side") == nil && m[n.ID] == "" {
 			m[n.ID] = "+"
 		}
+		if e.hasWork(n) && m[n.ID] == "" {
+			m[n.ID] = "+"
+		}
 	}
 	for _, q := range e.C.Quests {
 		if q.Stage == "return" && q.Giver != "" {

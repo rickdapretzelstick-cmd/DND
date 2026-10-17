@@ -433,7 +433,7 @@ func GenerateWorld(seed int64) *World {
 	w.Set(w.SpawnX, w.SpawnY, TGravel)
 	w.connectAll()
 	w.placeNPCs(r)
-	return w
+	return w.Upscale(WorldScale)
 }
 
 func (w *World) nearestNamedTown(x, y float64) *Town {

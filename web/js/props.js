@@ -69,46 +69,49 @@ function makeSprite(kind, v) {
   const seed = v * 31 + 7;
   switch (kind) {
     case "oak": case "sakura": case "autumn": {
-      const ramp = PALETTES[kind === "oak" && v % 2 ? "oak2" : kind];
-      const sp = sprite(34, 40, (d, w) => {
-        trunk(d, w, 15, 26, 38, 4, kind === "sakura" ? [96, 62, 56] : [104, 72, 44]);
-        blob(d, w, 17, 12, 13, 11, ramp, seed);
-        blob(d, w, 10, 18, 8, 7, ramp, seed + 1);
-        blob(d, w, 24, 18, 8, 7, ramp, seed + 2);
-        blob(d, w, 17, 20, 10, 6, ramp, seed + 3);
+      const ramp = PALETTES[kind === "oak" && v % 2 ? "oak2" : kind], T = 1.9, q = (n) => Math.round(n * T);
+      const sp = sprite(q(34), q(40), (d, w) => {
+        trunk(d, w, q(15), q(26), q(39), q(4), kind === "sakura" ? [96, 62, 56] : [104, 72, 44]);
+        blob(d, w, q(17), q(12), q(13), q(11), ramp, seed);
+        blob(d, w, q(10), q(18), q(8), q(7), ramp, seed + 1);
+        blob(d, w, q(24), q(18), q(8), q(7), ramp, seed + 2);
+        blob(d, w, q(17), q(20), q(10), q(6), ramp, seed + 3);
+        for (let i = 0; i < 6; i++) blob(d, w, q(8 + (i * 5) % 20), q(10 + ((i * 7) % 10)), q(4), q(3.4), ramp, seed + 10 + i);
       });
-      return { cv: sp, ax: 17, ay: 37 };
+      return { cv: sp, ax: q(17), ay: q(38) };
     }
     case "pine": {
-      const sp = sprite(26, 46, (d, w) => {
-        trunk(d, w, 11, 36, 44, 3, [90, 62, 40]);
+      const T = 1.9, q = (n) => Math.round(n * T);
+      const sp = sprite(q(26), q(46), (d, w) => {
+        trunk(d, w, q(11), q(36), q(45), q(3), [90, 62, 40]);
         for (let t = 0; t < 4; t++) {
-          const y = 4 + t * 9, half = 5 + t * 2;
-          for (let yy = 0; yy < 13; yy++) {
-            const hw = Math.floor((yy / 12) * half) + 1;
-            for (let x = 13 - hw; x <= 13 + hw; x++) {
-              const l = 0.55 - ((x - 13) / half) * 0.5 - (yy / 14) * 0.2 + (hash(x, y + yy, seed) - 0.5) * 0.4;
+          const y = q(4 + t * 9), half = q(5 + t * 2), hgt = q(13);
+          for (let yy = 0; yy < hgt; yy++) {
+            const hw = Math.floor((yy / (hgt - 1)) * half) + 1;
+            for (let x = q(13) - hw; x <= q(13) + hw; x++) {
+              const l = 0.55 - ((x - q(13)) / half) * 0.5 - (yy / (hgt + 2)) * 0.2 + (hash(x, y + yy, seed) - 0.5) * 0.4;
               put(d, w, x, y + yy, rgb(PALETTES.pine[l < 0.25 ? 0 : l < 0.5 ? 1 : l < 0.75 ? 2 : 3]));
             }
           }
         }
       });
-      return { cv: sp, ax: 13, ay: 44 };
+      return { cv: sp, ax: q(13), ay: q(45) };
     }
     case "bush": case "berry": {
-      const sp = sprite(20, 14, (d, w) => {
-        blob(d, w, 10, 7, 9, 6, PALETTES[kind], seed);
-        blob(d, w, 6, 8, 5, 4, PALETTES[kind], seed + 1);
-        blob(d, w, 14, 8, 5, 4, PALETTES[kind], seed + 2);
+      const sp = sprite(30, 21, (d, w) => {
+        blob(d, w, 15, 11, 13, 9, PALETTES[kind], seed);
+        blob(d, w, 9, 12, 8, 6, PALETTES[kind], seed + 1);
+        blob(d, w, 21, 12, 8, 6, PALETTES[kind], seed + 2);
       });
-      return { cv: sp, ax: 10, ay: 12 };
+      return { cv: sp, ax: 15, ay: 18 };
     }
     case "boulder": {
-      const sp = sprite(24, 18, (d, w) => {
-        blob(d, w, 12, 10, 11, 8, PALETTES.rock, seed);
-        blob(d, w, 7, 12, 6, 5, PALETTES.rock, seed + 1);
+      const sp = sprite(40, 30, (d, w) => {
+        blob(d, w, 20, 17, 18, 13, PALETTES.rock, seed);
+        blob(d, w, 11, 21, 10, 8, PALETTES.rock, seed + 1);
+        blob(d, w, 29, 22, 9, 7, PALETTES.rock, seed + 2);
       });
-      return { cv: sp, ax: 12, ay: 16 };
+      return { cv: sp, ax: 20, ay: 27 };
     }
     case "crystal": {
       const sp = sprite(22, 30, (d, w) => {
@@ -199,27 +202,27 @@ export function chunkProps(at, cx, cy, size = 32) {
       const nearHill = [at(tx - 2, ty), at(tx + 2, ty), at(tx, ty - 2), at(tx, ty + 2)].some((n) => n === T.HILL || n === T.PEAK || n === T.ROCK);
       const grove = hash(Math.floor(tx / 9), Math.floor(ty / 9), 95);
       const kind = nearHill ? "pine" : grove > 0.86 ? "sakura" : grove < 0.1 ? "autumn" : "oak";
-      if (h < 0.78 || !nearHill) out.push({ x: px, y: py, kind, v });
-      if (h > 0.8) out.push({ x: tx + (1 - j1) * 0.8, y: ty + 0.9, kind: "bush", v: v & 1 });
+      if (h < 0.2 && (h < 0.15 || !nearHill)) out.push({ x: px, y: py, kind, v });
+      if (h > 0.93) out.push({ x: tx + (1 - j1) * 0.8, y: ty + 0.9, kind: "bush", v: v & 1 });
     } else if (t === T.GRASS || t === T.FLOWERS) {
-      if (h < 0.012) out.push({ x: px, y: py, kind: "oak", v });
-      else if (h < 0.035) out.push({ x: px, y: py, kind: h < 0.02 && t === T.FLOWERS ? "berry" : "bush", v: v & 1 });
+      if (h < 0.004) out.push({ x: px, y: py, kind: "oak", v });
+      else if (h < 0.014) out.push({ x: px, y: py, kind: h < 0.02 && t === T.FLOWERS ? "berry" : "bush", v: v & 1 });
     } else if (t === T.HILL) {
-      if (h < 0.05) out.push({ x: px, y: py, kind: "pine", v });
-      else if (h < 0.09) out.push({ x: px, y: py, kind: "boulder", v: v & 1 });
+      if (h < 0.02) out.push({ x: px, y: py, kind: "pine", v });
+      else if (h < 0.035) out.push({ x: px, y: py, kind: "boulder", v: v & 1 });
     } else if (t === T.ROCK) {
-      if (h < 0.16) out.push({ x: px, y: py, kind: "boulder", v: v & 1 });
+      if (h < 0.06) out.push({ x: px, y: py, kind: "boulder", v: v & 1 });
     } else if (t === T.CURSED) {
-      if (h < 0.06) out.push({ x: px, y: py, kind: "dead", v: v & 1 });
-      else if (h < 0.11) out.push({ x: px, y: py, kind: "crystal", v: v & 1 });
+      if (h < 0.015) out.push({ x: px, y: py, kind: "dead", v: v & 1 });
+      else if (h < 0.03) out.push({ x: px, y: py, kind: "crystal", v: v & 1 });
     } else if (t === T.SIDEWALK) {
       const nearRoad = [at(tx - 1, ty), at(tx + 1, ty), at(tx, ty - 1), at(tx, ty + 1)].includes(T.PAVED);
-      if (nearRoad && (tx * 3 + ty * 5) % 7 === 0) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lamp", v: 0 });
-      else if (h < 0.025 && at(tx, ty - 1) === T.BUILDING) out.push({ x: tx + 0.5, y: ty + 0.95, kind: "vending", v });
+      if (nearRoad && (tx * 3 + ty * 5) % 19 === 0) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lamp", v: 0 });
+      else if (h < 0.006 && at(tx, ty - 1) === T.BUILDING) out.push({ x: tx + 0.5, y: ty + 0.95, kind: "vending", v });
     } else if (t === T.PLAZA) {
-      if (tx % 5 === 0 && ty % 5 === 0 && h < 0.7) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lantern", v: 0 });
-      else if (h < 0.02) out.push({ x: tx + 0.5, y: ty + 0.8, kind: "bench", v: 0 });
-    } else if (t === T.WATER && h < 0.04) {
+      if (tx % 14 === 0 && ty % 14 === 0 && h < 0.8) out.push({ x: tx + 0.5, y: ty + 0.9, kind: "lantern", v: 0 });
+      else if (h < 0.004) out.push({ x: tx + 0.5, y: ty + 0.8, kind: "bench", v: 0 });
+    } else if (t === T.WATER && h < 0.015) {
       const shore = [at(tx - 1, ty), at(tx + 1, ty), at(tx, ty - 1), at(tx, ty + 1)].some((n) => n === T.SAND || n === T.GRASS);
       if (shore) out.push({ x: px, y: py, kind: "reed", v: 0 });
     }

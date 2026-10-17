@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"regexp"
 	"strings"
@@ -237,4 +238,40 @@ func (e *Engine) prepareAll(q *Quest) {
 		}
 	}
 	q.Steps = kept
+}
+
+// hasWork says whether an NPC is "looking for help" today. A few people in every town rotate daily so
+// there is always something to find by asking around; the "+" over their head is the hint.
+func (e *Engine) hasWork(n *NPC) bool {
+	switch n.Role {
+	case "gojo", "yaga", "nanami", "junpei", "ijichi":
+		// story people are marked by the story, not the job board
+		return false
+	}
+	if q := e.questFrom(n.ID, "ai"); q != nil {
+		return false
+	}
+	if !e.C.Started {
+		return false
+	}
+	h := uint32(e.C.Day)*2654435761 ^ uint32(len(n.ID))*40503
+	for _, c := range n.ID {
+		h = h*31 + uint32(c)
+	}
+	return h%5 == 0
+}
+
+// jobHint names the closest person looking for help, for rumors and the tracker.
+func (e *Engine) jobHint(x, y float64) (*NPC, float64) {
+	var best *NPC
+	bd := math.MaxFloat64
+	for _, n := range e.allNPCs() {
+		if !e.hasWork(n) {
+			continue
+		}
+		if d := math.Hypot(n.X-x, n.Y-y); d < bd {
+			best, bd = n, d
+		}
+	}
+	return best, bd
 }

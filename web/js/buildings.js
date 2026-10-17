@@ -31,7 +31,7 @@ function jp(c, b, W, H, ext) {
   const roof = temple ? (big ? "#2f3350" : "#3d405b") : ROOFS[b.color % ROOFS.length];
   const wall = WALLS[(b.color + 2) % WALLS.length];
   const ox = MX, oy = ext;
-  const wallH = Math.min(big ? 24 : 18, H - 8);
+  const wallH = Math.min(big ? 30 : 26, H - 8);
   const wy = oy + H - wallH;
   // wall + foundation
   R(c, ox + 1, wy, W - 2, wallH, wall);
@@ -94,7 +94,7 @@ function jp(c, b, W, H, ext) {
 
 function city(c, b, W, H, ext) {
   const kind = b.kind;
-  const Z = { tower: 56, office: 34, apartment: 26, store: 6, station: 14 }[kind] || 20;
+  const Z = { tower: 96, office: 58, apartment: 44, store: 12, station: 26 }[kind] || 30;
   const body = BODIES[b.color % BODIES.length];
   const ox = MX, oy = ext - Z;
   const fh = H + Z, fy = oy + 6;           // front facade (below roof cap)
@@ -152,19 +152,27 @@ function ruin(c, b, W, H, ext) {
   }
 }
 
+const U = 2; // buildings are drawn at half size, then doubled, so doors and windows suit a 1:1 world
+
 function make(b) {
-  const W = b.w * 16, H = b.h * 16;
+  const bs = { ...b, w: b.w / U, h: b.h / U };
+  const W = bs.w * 16, H = bs.h * 16;
   const kind = b.kind;
   const isCity = ["office", "apartment", "store", "tower", "station"].includes(kind);
-  const ext = isCity ? ({ tower: 70, office: 48, apartment: 40, store: 20, station: 28 }[kind] || 36) : kind === "temple" ? 48 : kind.startsWith("site_") || kind === "gate" ? 28 : 26;
-  const cv = document.createElement("canvas");
-  cv.width = W + MX * 2 + 6; cv.height = H + ext + 4;
-  const c = cv.getContext("2d");
+  const ext = isCity ? ({ tower: 110, office: 72, apartment: 58, store: 26, station: 40 }[kind] || 44) : kind === "temple" ? 56 : kind.startsWith("site_") || kind === "gate" ? 30 : 34;
+  const small = document.createElement("canvas");
+  small.width = W + MX * 2 + 6; small.height = H + ext + 4;
+  const c = small.getContext("2d");
   c.imageSmoothingEnabled = false;
-  if (isCity) city(c, b, W, H, ext);
-  else if (kind === "gate" || kind.startsWith("site_")) ruin(c, b, W, H, ext);
-  else jp(c, b, W, H, ext);
-  return { cv, ox: MX, oy: ext, W, H, ext };
+  if (isCity) city(c, bs, W, H, ext);
+  else if (kind === "gate" || kind.startsWith("site_")) ruin(c, bs, W, H, ext);
+  else jp(c, bs, W, H, ext);
+  const cv = document.createElement("canvas");
+  cv.width = small.width * U; cv.height = small.height * U;
+  const g = cv.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.drawImage(small, 0, 0, cv.width, cv.height);
+  return { cv, ox: MX * U, oy: ext * U, W: b.w * 16, H: b.h * 16, ext: ext * U };
 }
 
 const cache = new Map();
@@ -177,7 +185,7 @@ export function buildingSprite(b) {
 // Baked onto the ground chunk: soft cast shadow to the lower-right.
 export function drawBuildingShadow(ctx, b, x0, y0) {
   const W = b.w * 16, H = b.h * 16;
-  const tall = ["tower", "office", "apartment"].includes(b.kind) ? 28 : b.kind === "temple" ? 14 : 8;
+  const tall = ["tower", "office", "apartment"].includes(b.kind) ? 70 : b.kind === "temple" ? 28 : 16;
   ctx.fillStyle = "rgba(12,16,34,0.30)";
   ctx.beginPath();
   ctx.moveTo(x0 + 2, y0 + H);

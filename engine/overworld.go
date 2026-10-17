@@ -9,13 +9,15 @@ import (
 	"time"
 )
 
+const arriveRange = 6.0 // how close counts as having reached a quest location
+
 const (
 	tickRate      = 200 * time.Millisecond
 	roamWander    = 1.4 // tiles per second
 	roamChase     = 2.7
-	aggroRange    = 6.0
-	touchRange    = 0.9
-	joinRange     = 11.0
+	aggroRange    = 14.0
+	touchRange    = 1.7
+	joinRange     = 24.0
 	maxStep       = 2.5 // max tiles a client may move between updates
 	gameHourSecs  = 50.0
 	hubSafeRadius = 6
@@ -60,7 +62,7 @@ func (e *Engine) onArrive(ch *Character) {
 		if q.Stage != "active" || len(q.Encounter) == 0 {
 			continue
 		}
-		if math.Hypot(ch.X-float64(q.X), ch.Y-float64(q.Y)) < 3.5 {
+		if math.Hypot(ch.X-float64(q.X), ch.Y-float64(q.Y)) < arriveRange {
 			if ch.Level < q.MinLevel-1 && q.Kind == "main" {
 				if e.warned[q.ID+ch.ID] {
 					continue
@@ -104,7 +106,7 @@ func (e *Engine) nearbyFighters(x, y float64) []*Character {
 
 func (e *Engine) biomeAt(x, y float64) string {
 	for _, s := range e.W.Sites {
-		if math.Hypot(float64(s.X)-x, float64(s.Y)-y) < 7 {
+		if math.Hypot(float64(s.X)-x, float64(s.Y)-y) < 24 {
 			return s.Kind
 		}
 	}
@@ -247,9 +249,9 @@ func (e *Engine) roamerBattle(r *Roamer, trigger *Character) {
 
 // populate keeps a healthy number of curses roaming the wilds.
 func (e *Engine) populate() {
-	want := 26 + len(e.W.Sites)
+	want := 70 + 3*len(e.W.Sites)
 	if e.C.Clock >= 20 || e.C.Clock < 5 {
-		want += 10
+		want += 25
 	}
 	tries := 0
 	for len(e.Roamers) < want && tries < 6 {
@@ -277,8 +279,8 @@ func (e *Engine) spawnRoamer() {
 	ok := false
 	for i := 0; i < 30 && !ok; i++ {
 		if site != nil {
-			x = float64(site.X) + rand.Float64()*10 - 5
-			y = float64(site.Y) + rand.Float64()*10 - 5
+			x = float64(site.X) + rand.Float64()*40 - 20
+			y = float64(site.Y) + rand.Float64()*40 - 20
 		} else {
 			x = rand.Float64() * float64(e.W.W)
 			y = rand.Float64() * float64(e.W.H)
@@ -286,12 +288,12 @@ func (e *Engine) spawnRoamer() {
 		if !e.W.Walkable(x, y) {
 			continue
 		}
-		if t, d := e.W.NearestTown(x, y); t != nil && d < float64(t.R)+6 {
+		if t, d := e.W.NearestTown(x, y); t != nil && d < float64(t.R)+14 {
 			continue
 		}
 		ok = true
 		for _, ch := range e.C.Characters {
-			if math.Hypot(ch.X-x, ch.Y-y) < 9 {
+			if math.Hypot(ch.X-x, ch.Y-y) < 22 {
 				ok = false
 			}
 		}
@@ -300,7 +302,7 @@ func (e *Engine) spawnRoamer() {
 		return
 	}
 	dist := math.Hypot(x-float64(hub.X), y-float64(hub.Y))
-	rank := min(3, int(dist/30))
+	rank := min(3, int(dist/(30*WorldScale)))
 	tag := e.biomeAt(x, y)
 	if site != nil {
 		tag = site.Tag

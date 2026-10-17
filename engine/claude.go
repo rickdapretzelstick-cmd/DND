@@ -383,7 +383,7 @@ func (e *Engine) placeName(x, y float64) string {
 		}
 	}
 	t, d := e.W.NearestTown(x, y)
-	return fmt.Sprintf("in the wilds, %d m %s of %s (%s terrain)", int(d*4), compass(x-float64(t.X), y-float64(t.Y)), t.Name, e.biomeAt(x, y))
+	return fmt.Sprintf("in the wilds, %d m %s of %s (%s terrain)", int(d), compass(x-float64(t.X), y-float64(t.Y)), t.Name, e.biomeAt(x, y))
 }
 
 func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
@@ -486,25 +486,25 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 	npcSeen := map[string]bool{}
 	for _, ch := range focus {
 		fmt.Fprintf(&b, "Around %s (%s):\n", ch.Name, e.placeName(ch.X, ch.Y))
-		for _, n := range e.nearbyNPCs(ch.X, ch.Y, 10) {
+		for _, n := range e.nearbyNPCs(ch.X, ch.Y, 40) {
 			if npcSeen[n.ID] {
 				continue
 			}
 			npcSeen[n.ID] = true
-			fmt.Fprintf(&b, "  - NPC %s [%s], %s, %dm away: %s", n.Name, n.ID, n.Role, int(math.Hypot(n.X-ch.X, n.Y-ch.Y)*4), n.Desc)
+			fmt.Fprintf(&b, "  - NPC %s [%s], %s, %dm away: %s", n.Name, n.ID, n.Role, int(math.Hypot(n.X-ch.X, n.Y-ch.Y)), n.Desc)
 			if st := c.NPCs[n.ID]; st != nil && len(st.Notes) > 0 {
 				fmt.Fprintf(&b, " Remembers: %s.", strings.Join(st.Notes, "; "))
 			}
 			b.WriteString("\n")
 		}
 		for _, r := range e.Roamers {
-			if dd := math.Hypot(r.X-ch.X, r.Y-ch.Y); dd < 12 {
-				fmt.Fprintf(&b, "  - Roaming curse: %s (group of %d) %dm %s\n", Bestiary[r.Kind].Name, len(r.Group), int(dd*4), compass(r.X-ch.X, r.Y-ch.Y))
+			if dd := math.Hypot(r.X-ch.X, r.Y-ch.Y); dd < 40 {
+				fmt.Fprintf(&b, "  - Roaming curse: %s (group of %d) %dm %s\n", Bestiary[r.Kind].Name, len(r.Group), int(dd), compass(r.X-ch.X, r.Y-ch.Y))
 			}
 		}
 		for _, s := range e.W.Sites {
-			if dd := math.Hypot(float64(s.X)-ch.X, float64(s.Y)-ch.Y); dd < 20 {
-				fmt.Fprintf(&b, "  - Cursed site %s [%s] (%s), %dm %s%s\n", s.Name, s.ID, GradeNames[s.Rank], int(dd*4), compass(float64(s.X)-ch.X, float64(s.Y)-ch.Y), map[bool]string{true: ", cleared", false: ""}[c.Cleared[s.ID]])
+			if dd := math.Hypot(float64(s.X)-ch.X, float64(s.Y)-ch.Y); dd < 90 {
+				fmt.Fprintf(&b, "  - Cursed site %s [%s] (%s), %dm %s%s\n", s.Name, s.ID, GradeNames[s.Rank], int(dd), compass(float64(s.X)-ch.X, float64(s.Y)-ch.Y), map[bool]string{true: ", cleared", false: ""}[c.Cleared[s.ID]])
 			}
 		}
 	}
