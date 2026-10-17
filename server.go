@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,8 @@ type Server struct {
 	tokens    map[string]int
 	notify    chan struct{}
 	posNotify chan struct{}
+	tunnel    *Tunnel
+	port      int
 }
 
 func NewServer(eng *engine.Engine, static fs.FS) *Server {
@@ -255,6 +258,23 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 		}
 		writeJSON(w, eng.ListCampaigns())
 	})
+	s.mux.HandleFunc("/api/host/online", func(w http.ResponseWriter, r *http.Request) {
+		if !isLocal(r) || s.tunnel == nil {
+			http.Error(w, "host only", http.StatusForbidden)
+			return
+		}
+		if r.Method == http.MethodPost {
+			var req struct{ Action string }
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)
+			switch req.Action {
+			case "start":
+				s.tunnel.Start(s.port)
+			case "stop":
+				s.tunnel.Stop()
+			}
+		}
+		writeJSON(w, s.tunnel.Status())
+	})
 	s.mux.HandleFunc("/api/host/info", func(w http.ResponseWriter, r *http.Request) {
 		if !isLocal(r) {
 			http.Error(w, "host only", http.StatusForbidden)
@@ -302,13 +322,32 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+// isLocal is true only for the person sitting at the host computer: a loopback connection that
+// did not come through a tunnel or proxy (those add forwarding headers and a public Host name).
 func isLocal(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return false
 	}
 	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	if ip == nil || !ip.IsLoopback() {
+		return false
+	}
+	for _, h := range []string{"X-Forwarded-For", "X-Forwarded-Host", "Forwarded", "X-Real-Ip", "Cf-Connecting-Ip", "Cf-Ray", "True-Client-Ip"} {
+		if r.Header.Get(h) != "" {
+			return false
+		}
+	}
+	hn := r.Host
+	if h, _, err := net.SplitHostPort(r.Host); err == nil {
+		hn = h
+	}
+	hn = strings.Trim(hn, "[]")
+	if hn == "localhost" || hn == "" {
+		return true
+	}
+	hip := net.ParseIP(hn)
+	return hip != nil && hip.IsLoopback()
 }
 
 func reply(w http.ResponseWriter, err error) {
@@ -460,7 +499,7 @@ func (s *Server) data(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
-	out := map[string]any{"isHost": isLocal(r)}
+	out := map[string]any{"isHost": isLocal(r), "needCode": s.roomCode() != "" && !isLocal(r)}
 	if p := s.eng.PlayerByToken(r.URL.Query().Get("token")); p != nil {
 		out["playerId"] = p.ID
 		out["name"] = p.Name
@@ -468,10 +507,23 @@ func (s *Server) whoami(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+func (s *Server) roomCode() string {
+	if s.tunnel == nil {
+		return ""
+	}
+	return s.tunnel.Code()
+}
+
 func (s *Server) join(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Name, Token string }
+	var req struct{ Name, Token, Code string }
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
 		reply(w, err)
+		return
+	}
+	if code := s.roomCode(); code != "" && !isLocal(r) && s.eng.PlayerByToken(req.Token) == nil &&
+		!strings.EqualFold(strings.TrimSpace(req.Code), code) {
+		w.WriteHeader(http.StatusForbidden)
+		writeJSON(w, map[string]string{"error": "This room is online — ask the host for the room code."})
 		return
 	}
 	p, err := s.eng.Join(req.Name, req.Token)

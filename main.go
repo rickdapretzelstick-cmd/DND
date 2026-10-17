@@ -73,6 +73,7 @@ func main() {
 
 	static, _ := fs.Sub(webFS, "web")
 	srv := NewServer(eng, static)
+	srv.tunnel, srv.port = NewTunnel(dir), p
 
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
 	if err != nil {

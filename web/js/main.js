@@ -68,6 +68,11 @@ async function boot() {
   DATA = await api("/api/data");
   const who = await fetch("/api/whoami?token=" + encodeURIComponent(token)).then((r) => r.json());
   me.isHost = who.isHost;
+  if (who.needCode) {
+    $("#join-code-wrap").classList.remove("hidden");
+    const m = /code=([A-Za-z0-9]+)/.exec(location.hash);
+    if (m) $("#join-code").value = m[1].toUpperCase();
+  }
   $("#btn-host").classList.toggle("hidden", !me.isHost);
   if ("ontouchstart" in window) $("#dpad").classList.remove("hidden");
   if (who.playerId) { me.playerId = who.playerId; me.name = who.name; connect(); }
@@ -81,7 +86,7 @@ async function joinTable() {
   const name = $("#join-name").value.trim();
   if (!name) return toast("Enter your name");
   try {
-    const r = await api("/api/join", { name, token });
+    const r = await api("/api/join", { name, token, code: $("#join-code").value.trim() });
     token = r.token;
     localStorage.setItem("jjk_token", token);
     me.playerId = r.playerId; me.name = r.name;
@@ -911,6 +916,37 @@ function drawMinimap(me2) {
   }
 }
 
+// ---------- online play (free tunnel) ----------
+let onlineTimer = 0;
+function renderOnline(st) {
+  const box = $("#host-online");
+  const share = st.url ? `${st.url}/#code=${st.code}` : "";
+  let html = "<b>🌍 Play online with friends — free</b><br>";
+  if (st.state === "off" || st.state === "error") {
+    if (st.error) html += `<span style="color:#fda4af">${esc(st.error)}</span><br>`;
+    html += `<span class="muted">Opens a free private link (no account). The first time may download a small helper (~30 MB). Friends need the link <i>and</i> a room code.</span><br><button class="btn" id="h-online-on">🌍 Go online</button>`;
+  } else if (st.state === "starting") {
+    html += `<span class="muted">Opening a tunnel${st.method ? " via " + esc(st.method) : ""}… this can take up to a minute the first time.</span>`;
+  } else {
+    html += `Share this link: <code id="h-online-url">${esc(share)}</code> <button class="mini" id="h-online-copy">Copy</button><br>
+      Room code: <b style="letter-spacing:.15em">${esc(st.code)}</b> <span class="muted">(already included in the link)</span><br>
+      <button class="btn" id="h-online-off">⏹ Stop sharing</button>`;
+  }
+  box.innerHTML = html;
+  const on = $("#h-online-on"), off = $("#h-online-off"), cp = $("#h-online-copy");
+  if (on) on.onclick = async () => { renderOnline(await api("/api/host/online", { action: "start" })); pollOnline(); };
+  if (off) off.onclick = async () => { renderOnline(await api("/api/host/online", { action: "stop" })); };
+  if (cp) cp.onclick = () => { navigator.clipboard?.writeText(share); toast("Link copied"); };
+}
+async function pollOnline() {
+  clearTimeout(onlineTimer);
+  try {
+    const st = await api("/api/host/online");
+    renderOnline(st);
+    if (!$("#host-modal").classList.contains("hidden") && st.state === "starting") onlineTimer = setTimeout(pollOnline, 1500);
+  } catch (e) { /* not host */ }
+}
+
 // ---------- host ----------
 $("#btn-host").onclick = openHost;
 $("#host-close").onclick = () => $("#host-modal").classList.add("hidden");
@@ -927,6 +963,7 @@ async function openHost() {
     $("#h-ourl").value = info.ollamaUrl || "http://localhost:11434";
     $("#h-octx").value = String(info.ollamaCtx || 16384);
     showProvider();
+    pollOnline();
   } catch (e) { toast(e.message); }
   if (S) { $("#h-mode").value = S.mode; $("#h-setting").value = S.setting || ""; $("#h-start").disabled = S.started; }
   loadCamps();

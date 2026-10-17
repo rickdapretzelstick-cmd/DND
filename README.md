@@ -112,3 +112,8 @@ Layout:
   offline DM (`offline.go`, `content.go`), and the Claude DM (`claude.go`, which uses tools for rolls, combat,
   loot, XP and campaign memory).
 - `web/`: the browser UI (plain HTML/CSS/JS, no external downloads, so it works fully offline).
+
+
+## Play online for free
+
+Open the host panel (⚙ Host) and click **🌍 Go online**. The app opens a free tunnel (Cloudflare quick tunnel, or Windows' built-in `ssh` to localhost.run, no account needed; it may download a small helper the first time) and shows a link plus a room code. Send the link to friends; they need the code to join. Only you (the person at the host computer) get host controls. Click **Stop sharing** to close it. Set `DND_DEBUG=1` only for development test hooks.

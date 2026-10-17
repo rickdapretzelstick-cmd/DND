@@ -101,6 +101,8 @@
     <p>A self-running multiplayer jujutsu RPG. Walk the world, exorcise curses, master your cursed technique — and decide what kind of sorcerer you'll be.</p>
     <label for="join-name">Your name (the player)</label>
     <input id="join-name" type="text" maxlength="30" placeholder="e.g. Sam" autocomplete="off">
+    <div id="join-code-wrap" class="hidden"><label for="join-code">Room code (from the host)</label>
+    <input id="join-code" type="text" maxlength="12" placeholder="e.g. 3F9A1C" autocomplete="off" style="text-transform:uppercase"></div>
     <button id="btn-join" class="btn primary big">Enter the world</button>
     <div class="foot">呪いには呪いでしか対抗できない</div>
   </div></div>
@@ -141,6 +143,7 @@
     <h2>Host controls</h2>
     <h3>Invite players</h3>
     <div id="host-links" class="small"></div>
+    <div id="host-online" class="small" style="margin-top:10px"></div>
     <h3>Story</h3>
     <div class="row wrap">
       <button class="btn primary" id="h-start">🌸 Begin the story</button>
