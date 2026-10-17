@@ -1,0 +1,7 @@
+dist/
+saves/
+dnd-runner-config.json
+/dnd-runner
+/DND
+*.json.tmp
+.DS_Store

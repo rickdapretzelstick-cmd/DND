@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D&amp;D Campaign Runner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="logo">⚔ D&amp;D <span>Campaign Runner</span></div>
+  <div id="hdr-campaign"></div>
+  <div id="hdr-quest" class="grow"></div>
+  <span id="hdr-dm" class="badge"></span>
+  <span id="hdr-conn" class="badge"><span class="dot"></span><span>connecting</span></span>
+  <button id="btn-host" class="btn small hidden">⚙ Host</button>
+</header>
+
+<!-- join -->
+<section id="join" class="screen hidden">
+  <div class="hero">
+    <h1>🐉 Gather your party</h1>
+    <p>A self-running tabletop campaign. Everyone on the network joins from their own browser, makes a hero, and the Dungeon Master runs the rest.</p>
+  </div>
+  <div class="card">
+    <label for="join-name">Your name (the player, not the character)</label>
+    <input id="join-name" type="text" maxlength="30" placeholder="e.g. Sam" autocomplete="off">
+    <div class="row" style="margin-top:12px"><button id="btn-join" class="btn primary grow">Join the table</button></div>
+  </div>
+</section>
+
+<!-- character creation -->
+<section id="create" class="screen hidden">
+  <div class="card">
+    <div class="row"><h2 class="grow">Create your hero</h2><span class="muted small" id="create-who"></span></div>
+    <label for="cr-name">Character name</label>
+    <input id="cr-name" type="text" maxlength="40" placeholder="e.g. Thorin Ashbeard" autocomplete="off">
+
+    <label>Race</label>
+    <div id="cr-races" class="choice-grid"></div>
+
+    <label>Class</label>
+    <div id="cr-classes" class="choice-grid"></div>
+    <div id="cr-class-info" class="muted small" style="margin-top:6px"></div>
+
+    <label>Ability scores</label>
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn small" id="cr-std">Standard array</button>
+      <button class="btn small" id="cr-roll">🎲 Roll 4d6 (drop lowest)</button>
+      <span class="muted small grow">Click two scores to swap them. Racial bonuses are added automatically.</span>
+    </div>
+    <div id="cr-stats" class="stats-grid"></div>
+
+    <label for="cr-back">Backstory (optional — the AI DM will weave it in)</label>
+    <textarea id="cr-back" rows="3" maxlength="1500" placeholder="Who are they? What do they want? What are they running from?"></textarea>
+    <div class="row" style="margin-top:14px">
+      <span id="cr-preview" class="muted small grow"></span>
+      <button id="btn-create" class="btn primary">Create character</button>
+    </div>
+  </div>
+</section>
+
+<!-- game -->
+<section id="game" class="hidden">
+  <div id="left" class="col">
+    <div class="panel">
+      <h2>The Party</h2>
+      <div id="party"></div>
+    </div>
+    <div class="panel">
+      <h3>At the table</h3>
+      <div id="players" class="small"></div>
+    </div>
+  </div>
+
+  <div id="center" class="col">
+    <div id="story" class="panel">
+      <div id="scene"><div class="loc" id="scene-loc"></div><div class="muted small" id="scene-desc"></div></div>
+      <div id="log"></div>
+      <div id="thinking" class="hidden">The Dungeon Master is thinking</div>
+      <div id="composer">
+        <div class="tabs">
+          <button class="tab sel" data-mode="act">🎭 Action</button>
+          <button class="tab" data-mode="ooc">💬 Table talk</button>
+          <span class="grow"></span>
+          <div class="dice" id="dice"></div>
+        </div>
+        <div class="row" style="align-items:stretch; flex-wrap:nowrap">
+          <textarea id="msg" class="grow" rows="2" placeholder="What does your character do?"></textarea>
+          <button id="btn-send" class="btn primary">Send</button>
+        </div>
+        <div id="start-hint" class="muted small hidden" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="right" class="col">
+    <div id="combat" class="panel hidden"></div>
+    <div id="sheet" class="panel"></div>
+  </div>
+</section>
+
+<!-- host modal -->
+<div id="host-modal" class="modal-bg hidden">
+  <div class="modal">
+    <button class="btn small close" id="host-close">✕</button>
+    <h2>Host controls</h2>
+    <p class="muted small">Only the computer running the program sees this.</p>
+
+    <h3>Invite players</h3>
+    <div id="host-links" class="links small"></div>
+
+    <h3 style="margin-top:14px">Table</h3>
+    <div class="hostbar">
+      <button class="btn primary" id="h-start">🐉 Begin adventure</button>
+      <button class="btn" id="h-skip">⏭ Skip current turn</button>
+      <button class="btn" id="h-short">☕ Short rest</button>
+      <button class="btn" id="h-long">🌙 Long rest</button>
+    </div>
+
+    <h3 style="margin-top:14px">Dungeon Master</h3>
+    <div class="row">
+      <label class="grow" style="margin:0">DM mode for this campaign
+        <select id="h-mode">
+          <option value="ai">🧠 AI Dungeon Master (Claude)</option>
+          <option value="offline">🎲 Offline Dungeon Master (no internet needed)</option>
+        </select>
+      </label>
+    </div>
+    <label for="h-key">Anthropic API key <span id="h-keyhint"></span></label>
+    <input id="h-key" type="password" placeholder="sk-ant-… (stored only on this computer)" autocomplete="off">
+    <p class="muted small">Get one at <b>console.anthropic.com</b> → API Keys. Without a key, the offline DM runs the game.</p>
+    <div class="row">
+      <label class="grow" style="margin:0">Model
+        <select id="h-model">
+          <option value="claude-opus-5-5">Claude Opus 5.5 (best storytelling)</option>
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (faster, cheaper)</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest, cheapest)</option>
+          <option value="claude-fable-5-1">Claude Fable 5.1 (most capable, slowest)</option>
+        </select>
+      </label>
+      <label class="grow" style="margin:0">Thinking effort
+        <select id="h-effort">
+          <option value="low">Low (fast replies)</option>
+          <option value="medium">Medium</option>
+          <option value="high">High (deeper, slower)</option>
+        </select>
+      </label>
+    </div>
+    <label for="h-setting">Setting &amp; tone notes for the DM</label>
+    <textarea id="h-setting" rows="3" placeholder="e.g. Grimdark sword &amp; sorcery in a frozen north. Lots of political intrigue. Keep it PG-13."></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn primary" id="h-save">Save DM settings</button></div>
+
+    <h3 style="margin-top:18px">Campaigns</h3>
+    <div id="h-camps"></div>
+    <details>
+      <summary>Start a new campaign</summary>
+      <label for="h-new-name">Campaign name</label>
+      <input id="h-new-name" type="text" placeholder="e.g. The Curse of Duskhollow">
+      <label for="h-new-setting">Setting &amp; tone (optional)</label>
+      <textarea id="h-new-setting" rows="2"></textarea>
+      <label for="h-new-mode">Dungeon Master</label>
+      <select id="h-new-mode">
+        <option value="ai">🧠 AI Dungeon Master (needs API key)</option>
+        <option value="offline">🎲 Offline Dungeon Master</option>
+      </select>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="h-new">Create &amp; switch</button></div>
+      <p class="muted small">The current campaign is saved automatically. Everyone at the table moves to the new one and makes new characters.</p>
+    </details>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>
