@@ -359,6 +359,19 @@ func (e *Engine) StartBattle(o BattleOpts) (string, error) {
 		cb.Order = append(cb.Order, Combatant{ID: m.ID, Name: m.Name, IsMonster: true, Init: init})
 		lines = append(lines, fmt.Sprintf("%s %d", m.Name, init))
 	}
+	if o.Surprise != "enemies" { // nobody should lose before they get to act: the party opens the fight
+		top := 0
+		for _, c := range cb.Order {
+			if c.IsMonster {
+				top = max(top, c.Init)
+			}
+		}
+		for i := range cb.Order {
+			if !cb.Order[i].IsMonster && cb.Order[i].Init <= top {
+				cb.Order[i].Init = top + 1
+			}
+		}
+	}
 	sort.SliceStable(cb.Order, func(i, j int) bool {
 		if cb.Order[i].Init != cb.Order[j].Init {
 			return cb.Order[i].Init > cb.Order[j].Init
@@ -1029,6 +1042,9 @@ func (e *Engine) damageMult(src, tgt fighter, technique bool) float64 {
 	}
 	if src.m != nil && src.m.Power > 0 {
 		m *= math.Max(0.35, float64(src.m.Power)/100)
+	}
+	if src.m != nil && tgt.c != nil && tgt.c.Level <= 3 && src.m.Rank <= 3 && !src.m.Boss { // gentle first levels
+		m *= 0.75
 	}
 	if technique && tgt.c != nil && tgt.c.Race == "half_curse" {
 		m *= 0.75

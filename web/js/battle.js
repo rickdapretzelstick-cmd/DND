@@ -384,11 +384,11 @@ export class BattleView {
         if (m.hp <= 0) continue;
       }
       // HP bar + name (+ telegraphed move)
-      const bw = Math.max(96, w * 0.9);
-      const by = p.y - h - 22;
       const nm = name.length > 22 ? name.slice(0, 21) + "…" : name;
       ctx.font = "800 12px system-ui, sans-serif";
       const nw = ctx.measureText(nm).width;
+      const bw = Math.max(96, w * 0.9, nw + 62);
+      const by = p.y - h - 22;
       const bx = p.x - bw / 2;
       ctx.fillStyle = "rgba(8,6,16,0.82)";
       ctx.beginPath(); ctx.moveTo(bx - 4, by - 17); ctx.lineTo(bx + Math.max(bw, nw + 18) + 4, by - 17); ctx.lineTo(bx + Math.max(bw, nw + 18) - 4, by + 11); ctx.lineTo(bx - 4, by + 11); ctx.closePath(); ctx.fill();
@@ -604,15 +604,15 @@ export class BattleView {
       ctx.fillStyle = b.color;
       ctx.fillText(b.text, W / 2, H * 0.24);
     } else {
-      const bh = b.bf ? 120 : 110;
-      const y = H * 0.42;
+      const bh = b.bf ? 76 : 110;
+      const y = b.bf ? H * 0.19 : H * 0.42;
       ctx.fillStyle = b.bf ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)";
       ctx.fillRect(0, y - bh / 2, W * Math.min(1, t * 6), bh);
       ctx.fillStyle = b.color;
       ctx.fillRect(0, y - bh / 2, W * Math.min(1, t * 6), 4);
       ctx.fillRect(0, y + bh / 2 - 4, W * Math.min(1, t * 6), 4);
       ctx.textAlign = "center";
-      ctx.font = `900 ${b.bf ? 64 : 46}px system-ui, sans-serif`;
+      ctx.font = `900 ${b.bf ? 50 : 46}px system-ui, sans-serif`;
       ctx.lineWidth = 8; ctx.strokeStyle = "#000";
       const shakeX = b.bf ? (Math.random() - 0.5) * 6 : 0;
       ctx.strokeText(b.text, W / 2 + shakeX, y + (b.sub ? -2 : 18));
