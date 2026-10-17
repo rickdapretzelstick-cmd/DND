@@ -122,6 +122,11 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 		return eng.UseAbilityOutOfCombat(t, req.Ability, req.Target)
 	})
 	if os.Getenv("DND_DEBUG") != "" {
+		s.mux.HandleFunc("/api/debug/tp", func(w http.ResponseWriter, r *http.Request) {
+			var req struct{ Where string }
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)
+			reply(w, eng.DebugTeleport(r.Header.Get("X-Token"), req.Where))
+		})
 		s.mux.HandleFunc("/api/debug/battle", func(w http.ResponseWriter, r *http.Request) {
 			var req struct {
 				Biome  string

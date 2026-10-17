@@ -78,7 +78,7 @@ func TestClaudeToolsLocal(t *testing.T) {
 			t.Errorf("turn prompt missing %q", want)
 		}
 	}
-	if !strings.Contains(systemPromptText(), "Fly Head") || len(dmTools) != 26 {
+	if !strings.Contains(systemPromptText(), "Fly Head") || len(dmTools) != 32 {
 		t.Errorf("system prompt or tools malformed (%d tools)", len(dmTools))
 	}
 }

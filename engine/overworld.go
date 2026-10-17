@@ -482,3 +482,20 @@ func (e *Engine) DebugBattle(token, biome string, spawns []Spawn) error {
 	e.changed()
 	return err
 }
+
+// DebugTeleport moves the caller next to a place or NPC id (DND_DEBUG only).
+func (e *Engine) DebugTeleport(token, where string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, ch, err := e.charOf(token)
+	if err != nil {
+		return err
+	}
+	x, y, _, ok := e.resolvePlace(where)
+	if !ok {
+		return fmt.Errorf("unknown place")
+	}
+	e.teleport([]*Character{ch}, x+0.5, y+1.2)
+	e.changed()
+	return nil
+}

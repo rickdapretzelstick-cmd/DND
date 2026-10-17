@@ -524,7 +524,31 @@ function drawCurse(ctx, sp, S, r, frame) {
       }
       break;
     }
+    case "swarm": {
+      const n = 16;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + r() * 0.6, rad = S * (0.12 + r() * 0.26);
+        const x = Math.round(cx + Math.cos(a) * rad), y = Math.round(base - S * 0.42 + Math.sin(a) * rad * 0.8 - (frame && i % 2 ? 1 : 0));
+        const col = i % 4 === 0 ? c2 : i % 2 ? c : shade(c, -0.18);
+        px(ctx, x - 2, y, 2, 1, col); px(ctx, x, y, 2, 1, col);                 // wings
+        px(ctx, x - 1, y + (frame && i % 2 ? 1 : -1), 1, 1, col); px(ctx, x + 1, y + (frame && i % 2 ? 1 : -1), 1, 1, col);
+        px(ctx, x - 1, y + 1, 2, 1, shade(col, -0.3));
+      }
+      if (nEyes > 0) eyesAt(ctx, [[cx - 2, base - S * 0.45, 2]], c2);
+      break;
+    }
     case "giant": {
+      if (sp.extra === "windows") {            // a vending machine / box-shaped curse
+        const w = S * 0.5, h = S * 0.78, x0 = cx - w / 2, y0 = base - h - b;
+        px(ctx, x0, y0, w, h, c); px(ctx, x0, y0, 2, h, shade(c, 0.2)); px(ctx, x0 + w - 3, y0, 3, h, shade(c, -0.3));
+        px(ctx, x0 + 3, y0 + 4, w - 10, h * 0.5, "#1b263b");
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) px(ctx, x0 + 5 + i * ((w - 14) / 3), y0 + 7 + j * (h * 0.15), Math.max(3, (w - 18) / 3), 3, [c2, "#9ad0ec", "#e9c46a"][(i + j) % 3]);
+        px(ctx, x0 + w - 6, y0 + 6, 3, 3, "#ffd166"); px(ctx, x0 + w - 6, y0 + 11, 3, 3, "#06d6a0");
+        px(ctx, x0 + 4, y0 + h - 14, w - 12, 8, "#0b0b12");
+        eyesAt(ctx, [[x0 + 6, y0 + 9, 4], [x0 + w - 18, y0 + 9, 4]], "#fff", "#7f0000");
+        for (let i = 0; i < w - 14; i += 3) px(ctx, x0 + 6 + i, y0 + h - 12, 2, 2, "#fff");
+        break;
+      }
       const rx = S * 0.42, ry = S * 0.36;
       const y = base - ry - b;
       blobShape(ctx, cx, y, rx, ry, c, r, 0.12);

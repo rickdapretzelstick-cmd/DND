@@ -471,38 +471,39 @@ type publicPlayer struct {
 }
 
 type Snapshot struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Setting    string            `json:"setting"`
-	Mode       string            `json:"mode"`
-	Started    bool              `json:"started"`
-	Seed       int64             `json:"seed"`
-	Location   string            `json:"location"`
-	Quest      string            `json:"quest"`
-	Act        int               `json:"act"`
-	Players    []publicPlayer    `json:"players"`
-	Characters []*Character      `json:"characters"`
-	Log        []LogEntry        `json:"log"`
-	Combat     *Combat           `json:"combat"`
-	LastBattle *BattleResult     `json:"lastBattle"`
-	Quests     []*Quest          `json:"quests"`
-	Choice     *Choice           `json:"choice"`
-	Rep        map[string]int    `json:"rep"`
-	Discovered map[string]bool   `json:"discovered"`
-	Cleared    map[string]bool   `json:"cleared"`
-	Extra      []*NPC            `json:"extraNpcs"`
-	Gone       []string          `json:"goneNpcs"`
-	Burned     []string          `json:"burned"`
-	Journal    []string          `json:"journal"`
-	Markers    map[string]string `json:"markers"`
-	Flags      map[string]string `json:"flags"`
-	Clock      float64           `json:"clock"`
-	Day        int               `json:"day"`
-	DMBusy     bool              `json:"dmBusy"`
-	AI         bool              `json:"ai"`
-	HasKey     bool              `json:"hasKey"`
-	Model      string            `json:"model"`
-	Effort     string            `json:"effort"`
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Setting      string                   `json:"setting"`
+	Mode         string                   `json:"mode"`
+	Started      bool                     `json:"started"`
+	Seed         int64                    `json:"seed"`
+	Location     string                   `json:"location"`
+	Quest        string                   `json:"quest"`
+	Act          int                      `json:"act"`
+	Players      []publicPlayer           `json:"players"`
+	Characters   []*Character             `json:"characters"`
+	Log          []LogEntry               `json:"log"`
+	Combat       *Combat                  `json:"combat"`
+	LastBattle   *BattleResult            `json:"lastBattle"`
+	CustomCurses map[string]CurseTemplate `json:"customCurses,omitempty"`
+	Quests       []*Quest                 `json:"quests"`
+	Choice       *Choice                  `json:"choice"`
+	Rep          map[string]int           `json:"rep"`
+	Discovered   map[string]bool          `json:"discovered"`
+	Cleared      map[string]bool          `json:"cleared"`
+	Extra        []*NPC                   `json:"extraNpcs"`
+	Gone         []string                 `json:"goneNpcs"`
+	Burned       []string                 `json:"burned"`
+	Journal      []string                 `json:"journal"`
+	Markers      map[string]string        `json:"markers"`
+	Flags        map[string]string        `json:"flags"`
+	Clock        float64                  `json:"clock"`
+	Day          int                      `json:"day"`
+	DMBusy       bool                     `json:"dmBusy"`
+	AI           bool                     `json:"ai"`
+	HasKey       bool                     `json:"hasKey"`
+	Model        string                   `json:"model"`
+	Effort       string                   `json:"effort"`
 }
 
 func (e *Engine) SnapshotJSON() []byte {
@@ -510,7 +511,7 @@ func (e *Engine) SnapshotJSON() []byte {
 	defer e.mu.Unlock()
 	c := e.C
 	s := Snapshot{ID: c.ID, Name: c.Name, Setting: c.Setting, Mode: c.Mode, Started: c.Started, Seed: c.Seed, Location: c.Location,
-		Quest: c.Quest, Act: c.Act, Combat: c.Combat, LastBattle: c.LastBattle, Rep: c.Rep, Discovered: c.Discovered, Cleared: c.Cleared, Extra: c.ExtraNPCs,
+		Quest: c.Quest, Act: c.Act, Combat: c.Combat, LastBattle: c.LastBattle, CustomCurses: c.CustomCurses, Rep: c.Rep, Discovered: c.Discovered, Cleared: c.Cleared, Extra: c.ExtraNPCs,
 		Journal: c.Journal, DMBusy: e.DMBusy, AI: e.AIActive(), HasKey: e.APIKey() != "" || e.Cfg.Provider == "ollama", Model: e.modelLabel(), Effort: e.Cfg.Effort,
 		Players: []publicPlayer{}, Characters: []*Character{}, Log: []LogEntry{}, Quests: []*Quest{}, Gone: []string{}, Burned: []string{}}
 	for _, p := range c.Players {

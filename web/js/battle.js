@@ -122,10 +122,11 @@ export class BattleView {
     });
     mons.forEach((m, i) => {
       const n = mons.length;
-      const y = H * (n > 1 ? 0.46 + (i / (n - 1)) * 0.13 : 0.53);
-      const x = n > 4 ? W * (0.60 + (i % 2) * 0.16 + Math.floor(i / 2) * 0.04) : W * (n > 1 ? 0.58 + (i / (n - 1)) * 0.2 : 0.7);
+      let x, y;
+      if (n <= 2) { y = H * (n > 1 ? 0.47 + (i / (n - 1)) * 0.12 : 0.53); x = W * (n > 1 ? 0.64 + i * 0.1 : 0.7); }
+      else { const col = Math.floor(i / 2), row = i % 2; x = W * (0.50 + col * 0.14 + row * 0.07); y = H * (row ? 0.58 : 0.47); }
       const size = m.sprite.size || 1;
-      const scale = Math.max(3, Math.floor((H * (0.14 + size * 0.06)) / (16 + size * 12)));
+      const scale = Math.max(3, Math.floor((H * (0.14 + size * 0.06)) / (16 + size * 12) * (n > 3 ? 0.85 : 1)));
       L[m.id] = { x, y, scale, party: false };
     });
     this.layout = L;

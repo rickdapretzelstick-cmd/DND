@@ -112,6 +112,7 @@ const charById = (id) => S?.characters.find((c) => c.id === id);
 async function onState(snap) {
   const prevCombat = S?.combat;
   S = snap;
+  window.__S = S;
   if (!myPlayer()) { api("/api/join", { name: me.name || "Sorcerer", token }).catch(() => {}); return; }
   if (worldSeed !== S.seed) {
     worldSeed = S.seed;
@@ -133,6 +134,7 @@ async function onState(snap) {
     if (!e) ents.set(c.id, { x: c.x, y: c.y, tx: c.x, ty: c.y, dir: c.dir, moving: false });
     else if (Math.hypot(e.x - c.x, e.y - c.y) > 4) { e.x = e.tx = c.x; e.y = e.ty = c.y; }
   }
+  if (S.customCurses) Object.assign(DATA.curses, S.customCurses);
   battle.update(S.combat, S.characters);
   if (!S.combat) watchBattle = false;
   if (prevCombat && !S.combat) battleTarget = "";
@@ -245,8 +247,14 @@ function renderHUD() {
   $("#dm-badge").title = S.ai ? "The AI Dungeon Master is narrating — do anything." : "Offline DM. The host can enable the AI DM for free-form play.";
   // Tracker
   const active = S.quests.filter((q) => q.stage === "active" || q.stage === "return");
-  $("#tracker").innerHTML = active.length ? active.map((q) => `<div class="q ${q.kind}"><b>${esc(q.title)}</b><span class="st">${q.stage === "return" ? "Report to " + esc(q.giverName || "giver") : "Active"}</span><div>${esc(q.objective)}</div></div>`).join("")
-    : `<div class="muted">${S.started ? "No active quests. Look for ! and + markers over people's heads." : "Waiting for the host to begin the story…"}</div>`;
+  const me0 = ents.get(mine?.id);
+  const dir8 = (dx, dy) => ["E", "SE", "S", "SW", "W", "NW", "N", "NE"][Math.round(((Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
+  $("#tracker").innerHTML = active.length ? active.map((q) => {
+    const dist = me0 ? Math.round(Math.hypot(q.x - me0.x, q.y - me0.y)) : 0;
+    const where = me0 && q.stage === "active" ? `<span class="where">${dist < 4 ? "here" : dist + " tiles " + dir8(q.x - me0.x, q.y - me0.y)}</span>` : "";
+    const steps = (q.steps || []).length ? `<ol class="steps">${q.steps.map((st, i) => `<li class="${st.done ? "done" : q.steps.findIndex((x) => !x.done) === i ? "now" : ""}">${st.done ? "✔" : q.steps.findIndex((x) => !x.done) === i ? "➤" : "·"} ${esc(st.text)}</li>`).join("")}</ol>` : `<div>${esc(q.objective)}</div>`;
+    return `<div class="q ${q.kind}"><b>${esc(q.title)}</b><span class="st">${q.stage === "return" ? "Report to " + esc(q.giverName || "giver") : "Active"}</span> ${where}${steps}</div>`;
+  }).join("") : `<div class="muted">${S.started ? "No active quests. Talk to people — ask around, offer to help, or just try something." : "Waiting for the host to begin the story…"}</div>`;
   // Battle UI
   renderBattleUI();
   maybeShowResults();
@@ -277,6 +285,7 @@ function knownAbilities(ch) {
   for (const id of tech?.moves || []) { const a = DATA.abilities[id]; if (a && ch.level >= (a.minLevel || 0)) out.push(a); }
   const d = DATA.abilities[tech?.domain];
   if (d && ch.level >= d.minLevel) out.push(d);
+  for (const cs of ch.custom || []) if (cs.kind === "active" && cs.ability) out.push(cs.ability);
   return out;
 }
 const abilityCost = (ch, a) => (ch.race === "gojo" && a.cost > 1 ? a.cost - 1 : a.cost) || 0;
@@ -400,8 +409,8 @@ function maybeShowResults() {
 }
 
 function useAbility(id) {
-  const a = DATA.abilities[id];
   const mine = myChar();
+  const a = knownAbilities(mine).find((x) => x.id === id) || DATA.abilities[id];
   const tgtKind = a.effects?.[0]?.target || "enemy";
   let target = battleTarget;
   if ((tgtKind === "ally" || tgtKind === "self") && !charById(battleTarget)) target = mine.id;
@@ -514,6 +523,7 @@ function renderPanel() {
       <div class="kv" style="grid-template-columns:repeat(6,1fr)">${DATA.abilityOrder.map((a) => `<div><b>${ch.stats[a]}</b><span>${DATA.abilityNames[a]} ${sign(mod(ch.stats[a]))}</span></div>`).join("")}</div>
       <h3>Techniques</h3>${knownAbilities(ch).map((a) => `<div class="abl"><b>${esc(a.name)}</b> <span class="muted">${a.cost ? abilityCost(ch, a) + " CE" : ""}${a.hpCost ? " · " + a.hpCost + " HP" : ""}${a.bonus ? " · bonus" : ""}</span> — ${esc(a.desc)}
         ${!ch.inBattle && a.effects?.some((e) => e.kind === "heal") ? `<button class="mini" data-heal="${a.id}">Use</button>` : ""}</div>`).join("")}
+      ${(ch.custom || []).filter((k) => k.kind === "passive").length ? `<h3>Perks picked up along the way</h3>${ch.custom.filter((k) => k.kind === "passive").map((k) => `<div class="abl"><b>🌟 ${esc(k.name)}</b> <span class="muted">+${k.amount} ${esc(k.mod === "skill" ? k.skill : k.mod)}</span> — ${esc(k.desc)} ${k.source ? `<span class="muted small">(${esc(k.source)})</span>` : ""}</div>`).join("")}` : ""}
       <div class="muted small">Coming: ${(tech?.abilities || []).filter((a) => a.minLevel > ch.level).map((a) => `${esc(a.name)} (Lv ${a.minLevel})`).join(", ") || "—"}</div>
       <h3>Inventory</h3><ul class="inv">${ch.inventory.map((it, i) => `<li><span>${esc(it.name)}${it.qty > 1 ? " ×" + it.qty : ""}${it.equipped ? '<span class="eq">EQUIPPED</span>' : ""}<br><span class="muted small">${esc(itemInfo(it))}</span></span>
         <span class="acts">${["weapon", "armor"].includes(it.kind) ? `<button class="mini" data-eq="${i}">${it.equipped ? "Unequip" : "Equip"}</button>` : ""}
@@ -537,7 +547,7 @@ function renderPanel() {
   } else if (panel === "quests") {
     const qs = S.quests.slice().reverse();
     body.innerHTML = `<h2>📜 Quests</h2>${qs.length ? qs.map((q) => `<div class="qcard ${q.kind}"><h4>${esc(q.title)} <span class="muted small">— ${q.kind === "main" ? "Main story" : q.kind === "ai" ? "Story" : "Job"} · ${esc(q.stage)}</span></h4>
-      <div>${esc(q.desc)}</div><div class="small" style="margin-top:4px">🎯 ${esc(q.objective)}</div>
+      <div>${esc(q.desc)}</div><div class="small" style="margin-top:4px">🎯 ${esc(q.objective)}</div>${(q.steps || []).length ? `<ol class="steps">${q.steps.map((st) => `<li class="${st.done ? "done" : ""}">${st.done ? "✔" : "·"} ${esc(st.text)}</li>`).join("")}</ol>` : ""}${q.rewardSkill ? `<div class="small muted">🌟 Reward: new skill "${esc(q.rewardSkill.name)}"${q.rewardTitle ? " · title \"" + esc(q.rewardTitle) + "\"" : ""}</div>` : ""}
       <div class="small muted">${q.giverName ? "From " + esc(q.giverName) + " · " : ""}Reward: ${q.rewardXp} XP, ${yen(q.rewardYen)}${q.minLevel > 1 ? " · Recommended level " + q.minLevel : ""}</div></div>`).join("") : '<p class="muted">No quests yet.</p>'}
       <h3>Journal</h3>${S.journal?.length ? `<ul>${S.journal.map((j) => `<li class="small">${esc(j)}</li>`).join("")}</ul>` : '<p class="muted small">Your story is just beginning.</p>'}`;
   } else if (panel === "map") {
@@ -834,7 +844,11 @@ function frame(now) {
     if (!tpl) continue;
     list.push({ x: r.x, y: r.y, draw: (c, sx, sy, z, t) => {
       const top = drawCurseEntity(c, sx, sy, z, tpl.sprite, tpl.id, t, { elite: r.e });
-      if (Math.hypot(r.x - me2.x, r.y - me2.y) < 7) nameplate(c, `${r.n || tpl.name}${r.c > 1 ? " ×" + r.c : ""}`, sx, top - 2, r.e ? "#ff4d6d" : "#e0aaff", tpl.grade);
+      const dd = Math.hypot(r.x - me2.x, r.y - me2.y);
+      if (dd < 13) {
+        const hot = ["#b7e4c7", "#e0aaff", "#ffd166", "#ff9e6d", "#ff4d6d", "#ff1f3d"][tpl.rank || 0];
+        nameplate(c, `${r.n || tpl.name}${r.c > 1 ? " ×" + r.c : ""}`, sx, top - 2, r.e ? "#ff4d6d" : hot, `${tpl.grade}${dd < 7 ? "" : " · sensed"}`);
+      }
     } });
   }
   // Quest markers in the world
@@ -850,6 +864,36 @@ function frame(now) {
   }
   world.clock = clock;
   const view = world.draw(ctx, W, H, cam, zoom, now, list);
+  // Objective compass: an arrow at the screen edge toward the nearest active quest target.
+  {
+    let best = null, bd = 1e9;
+    for (const q of S.quests) {
+      if (q.stage !== "active" || (q.owner && q.owner !== mine.id)) continue;
+      if (q.for && q.for !== mine.id) continue;
+      const d = Math.hypot(q.x - me2.x, q.y - me2.y);
+      if (d < bd) { bd = d; best = q; }
+    }
+    if (best && bd > 3) {
+      const [qx, qy] = view.toScreen(best.x + 0.5, best.y + 0.5);
+      const pad = 54, onscreen = qx > pad && qx < W - pad && qy > pad && qy < H - pad;
+      if (!onscreen) {
+        const cx = W / 2, cy = H / 2, ang = Math.atan2(qy - cy, qx - cx);
+        const k = Math.min((W / 2 - pad) / Math.abs(Math.cos(ang) || 1e-6), (H / 2 - pad) / Math.abs(Math.sin(ang) || 1e-6));
+        const ax = cx + Math.cos(ang) * k, ay = cy + Math.sin(ang) * k;
+        ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
+        const pulse = 0.75 + 0.25 * Math.sin(now / 250);
+        ctx.fillStyle = best.kind === "main" ? `rgba(255,77,109,${pulse})` : `rgba(255,214,10,${pulse})`;
+        ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -12); ctx.lineTo(-4, 0); ctx.lineTo(-10, 12); ctx.closePath(); ctx.stroke(); ctx.fill();
+        ctx.restore();
+        ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center";
+        const label = `${Math.round(bd)}`;
+        ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(label, ax - Math.cos(ang) * 24, ay - Math.sin(ang) * 24 + 4);
+        ctx.fillStyle = "#fff"; ctx.fillText(label, ax - Math.cos(ang) * 24, ay - Math.sin(ang) * 24 + 4);
+        ctx.textAlign = "left";
+      }
+    }
+  }
   // Lighting
   const lights = [];
   for (const c of S.characters) {

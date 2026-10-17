@@ -117,3 +117,10 @@ Layout:
 ## Play online for free
 
 Open the host panel (⚙ Host) and click **🌍 Go online**. The app opens a free tunnel (Cloudflare quick tunnel, or Windows' built-in `ssh` to localhost.run, no account needed; it may download a small helper the first time) and shows a link plus a room code. Send the link to friends; they need the code to join. Only you (the person at the host computer) get host controls. Click **Stop sharing** to close it. Set `DND_DEBUG=1` only for development test hooks.
+
+
+## Dynamic quests, fabricated skills and invented curses
+
+Quests aren't limited to a list. Ask anyone "any odd jobs?" (or type "can I be your assistant?" to the offline DM) and the game builds a quest from the real NPCs, shops and sites nearby: errands, deliveries, waiting out time, checking on people, exorcising a curse made up for the job. The tracker shows every step, how far away the next one is, and an arrow at the screen edge points to it. Finishing a job can earn a title and a **fabricated skill** (for example the nurse's assistant's *Bedside Manner*, +2 healing).
+
+With an AI DM (Claude or a local Ollama model) the same system is open-ended: the DM can call `create_quest` with its own steps for any scheme a player proposes, `add_quest_step` / `update_quest` as the story changes, `create_skill` for odd perks (passives are small and capped, active moves scale with level), and `create_curse` to invent a new curse with balanced stats, moves and a sprite. The engine owns every number, so the AI can be as creative as it likes with names and fiction without breaking the game.
