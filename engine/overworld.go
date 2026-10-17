@@ -474,6 +474,9 @@ func (e *Engine) DebugBattle(token, biome string, spawns []Spawn) error {
 		return err
 	}
 	_, err = e.StartBattle(BattleOpts{Spawns: spawns, Party: []*Character{ch}, X: ch.X, Y: ch.Y, Biome: biome, Title: "Test Exorcism"})
+	if err == nil && e.C.Combat != nil {
+		e.C.Combat.Flow = e.C.Combat.FlowMax
+	}
 	e.changed()
 	return err
 }

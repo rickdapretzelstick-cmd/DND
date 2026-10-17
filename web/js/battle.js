@@ -116,14 +116,14 @@ export class BattleView {
     const pScale = Math.max(4, Math.floor(H / 135));
     party.forEach((o, i) => {
       const n = party.length;
-      const y = H * (n > 1 ? 0.47 + (i / (n - 1)) * 0.13 : 0.54);
+      const y = H * (n > 1 ? 0.47 + (i / (n - 1)) * 0.12 : 0.53);
       const x = W * 0.25 + (i % 2) * W * 0.05;
       L[o.id] = { x, y, scale: pScale, party: true };
     });
     mons.forEach((m, i) => {
       const n = mons.length;
-      const y = H * (n > 1 ? 0.45 + (i / (n - 1)) * 0.16 : 0.54);
-      const x = W * 0.72 + (i % 2 ? W * 0.06 : -W * 0.03) - (n > 5 ? (i % 3) * W * 0.03 : 0);
+      const y = H * (n > 1 ? 0.46 + (i / (n - 1)) * 0.13 : 0.53);
+      const x = n > 4 ? W * (0.60 + (i % 2) * 0.16 + Math.floor(i / 2) * 0.04) : W * (n > 1 ? 0.58 + (i / (n - 1)) * 0.2 : 0.7);
       const size = m.sprite.size || 1;
       const scale = Math.max(3, Math.floor((H * (0.14 + size * 0.06)) / (16 + size * 12)));
       L[m.id] = { x, y, scale, party: false };
@@ -645,7 +645,7 @@ function hexA(hex, a) {
 // ---------- backgrounds ----------
 
 function drawBackground(ctx, W, H, bg, now, domain, clock = 12) {
-  const horizon = H * 0.55;
+  const horizon = H * 0.43;
   const g = ctx.createLinearGradient(0, 0, 0, horizon);
   let s0 = bg.sky[0], s1 = bg.sky[1];
   if (!domain && (clock >= 19 || clock < 5)) { s0 = "#03071e"; s1 = "#1d3557"; }
@@ -809,7 +809,7 @@ function drawBackground(ctx, W, H, bg, now, domain, clock = 12) {
 
 // Depth pass over any backdrop: perspective floor, light, drifting motes, foreground framing, vignette.
 function finishBackground(ctx, W, H, bg, now, domain, clock = 12) {
-  const horizon = H * 0.55;
+  const horizon = H * 0.43;
   const night = !domain && (clock >= 19 || clock < 5);
   // perspective floor lines
   ctx.save();

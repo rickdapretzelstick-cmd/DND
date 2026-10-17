@@ -476,3 +476,12 @@ code { background: #08070e; padding: 2px 8px; border: 1px solid var(--line); use
 #results .rh { margin-top: 12px; font-size: 11px; color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase; }
 @keyframes resin { from { opacity: 0; transform: scale(1.1); } }
 @media (max-width: 900px) { #battle-party { display: none; } #flow .sub { display: none; } }
+
+.abilities { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px; }
+.ab { min-height: 42px; padding: 5px 9px 6px 13px; }
+.ab.util { min-height: 0; padding: 4px 9px 4px 13px; }
+.ab .brief, .ab .cost { margin-top: 3px; }
+#battle-menu { padding: 8px 10px 10px; }
+#battle-menu .head { margin-bottom: 6px; }
+#battle-menu .yourturn { font-size: 18px; }
+.threats { margin-bottom: 5px; }

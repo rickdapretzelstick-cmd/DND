@@ -102,7 +102,14 @@ func (f fighter) damage(n int, crit bool) (int, string, bool) {
 	}
 	if f.c != nil {
 		wasUp := f.c.HP > 0
-		note := f.c.TakeDamage(n, crit)
+		// Once per battle, a blow that would drop a healthy sorcerer from over half HP leaves them clinging on at 1.
+		pre := ""
+		if f.c.InBattle && n >= f.c.HP && f.c.HP*2 > f.c.MaxHP && f.c.Used["resolve"] == 0 {
+			f.c.Used["resolve"] = 1
+			n = f.c.HP - 1
+			pre = "💢 Refusing to fall! "
+		}
+		note := pre + f.c.TakeDamage(n, crit)
 		return n, note, wasUp && f.c.HP <= 0
 	}
 	f.m.HP -= n
@@ -195,22 +202,18 @@ func (e *Engine) fx(f FX) {
 		return
 	}
 	if f.Kind == "move" || f.Kind == "blackflash" {
+		g := 0
 		for _, h := range f.Hits {
-			if h.Miss {
-				if e.fighterByID(h.ID).party() { // a dodge feeds the meter too
-					cb.Flow = min(cb.FlowMax, cb.Flow+1)
-				}
-				continue
-			}
-			if h.Dmg <= 0 {
-				continue
-			}
-			g := 1
-			if h.Crit || h.BF {
+			switch {
+			case h.Miss && e.fighterByID(h.ID).party(): // a dodge feeds the meter too
+				g = max(g, 1)
+			case !h.Miss && h.Dmg > 0 && (h.Crit || h.BF):
 				g = 2
+			case !h.Miss && h.Dmg > 0:
+				g = max(g, 1)
 			}
-			cb.Flow = min(cb.FlowMax, cb.Flow+g)
 		}
+		cb.Flow = min(cb.FlowMax, cb.Flow+g)
 	}
 	cb.FXSeq++
 	f.ID = cb.FXSeq
@@ -312,13 +315,16 @@ func (e *Engine) StartBattle(o BattleOpts) (string, error) {
 	if len(party) == 0 {
 		return "", fmt.Errorf("no sorcerer can fight")
 	}
-	cb := &Combat{FlowMax: 8, Round: 1, Biome: o.Biome, X: o.X, Y: o.Y, RoamerID: o.RoamerID, QuestID: o.QuestID, Title: o.Title}
+	cb := &Combat{FlowMax: 10, Round: 1, Biome: o.Biome, X: o.X, Y: o.Y, RoamerID: o.RoamerID, QuestID: o.QuestID, Title: o.Title}
 	e.C.Combat = cb
 	var lines []string
 	for _, ch := range party {
 		ch.Status, ch.Used, ch.Fled, ch.InBattle = map[string]int{}, map[string]int{}, false, true
 		r, _ := D20(0)
 		init := r + ch.Mod("DEX")
+		if o.Surprise != "enemies" {
+			init += 8 // the party gets the first move unless ambushed
+		}
 		if o.Surprise == "party" {
 			init += 10
 		}

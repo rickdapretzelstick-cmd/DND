@@ -265,7 +265,7 @@ const originName = (id) => DATA.origins.find((o) => o.id === id)?.name || id;
 function knownAbilities(ch) {
   const out = [];
   const tech = DATA.techniques.find((t) => t.id === ch.class);
-  for (const id of ["strike", "guard", "binding_vow", "simple_domain", "rct"]) {
+  for (const id of ["strike", "guard", "binding_vow", "simple_domain", "rct", "overdrive"]) {
     const a = DATA.abilities[id];
     if (ch.level >= (a.minLevel || 0) && !(id === "simple_domain" && tech?.noCE)) out.push(a);
   }
