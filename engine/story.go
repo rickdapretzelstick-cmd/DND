@@ -755,6 +755,7 @@ func (e *Engine) afterBattle(cb *Combat, outcome string, party []*Character) {
 		return
 	}
 	q.Stage = "return"
+	q.Objective = "Report back to " + q.GiverName + "."
 	if q.Site != "" {
 		e.C.Cleared[q.Site] = true
 	}

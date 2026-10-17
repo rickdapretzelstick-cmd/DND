@@ -493,11 +493,25 @@ func (e *Engine) DebugTeleport(token, where string) error {
 	if err != nil {
 		return err
 	}
-	x, y, _, ok := e.resolvePlace(where)
+	var x, y float64
+	ok := false
+	if n, _ := fmt.Sscanf(where, "%f,%f", &x, &y); n == 2 {
+		ok = true
+	} else {
+		x, y, _, ok = e.resolvePlace(where)
+	}
 	if !ok {
 		return fmt.Errorf("unknown place")
 	}
 	e.teleport([]*Character{ch}, x+0.5, y+1.2)
 	e.changed()
 	return nil
+}
+
+// DebugClock sets the time of day (DND_DEBUG only).
+func (e *Engine) DebugClock(h float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.C.Clock = h
+	e.changed()
 }

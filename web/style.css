@@ -218,10 +218,10 @@ kbd { font: 700 11px/1 var(--font); background: #f1edf8; color: #0a0810; padding
 .le.say b { color: #ffd6a5; }
 .le b.who { color: #bde0fe; }
 
-#story-card { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); width: min(680px, 92vw); padding: 16px 22px 18px 26px; font-family: var(--serif); font-size: 16px; line-height: 1.6; cursor: pointer; max-height: 42vh; overflow-y: auto; animation: cardIn 0.45s cubic-bezier(.2, .8, .2, 1);
+#story-card { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); z-index: 6; width: min(600px, 56vw); padding: 16px 22px 18px 26px; font-family: var(--serif); font-size: 16px; line-height: 1.6; cursor: pointer; max-height: 42vh; overflow-y: auto; animation: cardIn 0.45s cubic-bezier(.2, .8, .2, 1);
   background: var(--grain), linear-gradient(100deg, rgba(4, 3, 7, 0.97), rgba(18, 10, 26, 0.95)); }
 #story-card::after { content: "語"; position: absolute; right: 14px; top: 2px; font-family: var(--kanji); font-size: 64px; line-height: 1; color: rgba(239, 35, 60, 0.12); pointer-events: none; }
-@keyframes cardIn { from { opacity: 0; transform: translate(-50%, 16px); } }
+@keyframes cardIn { from { opacity: 0; margin-top: 14px; } }
 #story-card p { margin: 0.4em 0; position: relative; }
 #story-card p:first-child strong:first-child { display: block; font-family: var(--display); font-style: normal; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; font-size: 18px; color: #fff; border-bottom: 2px solid var(--red); padding-bottom: 4px; margin-bottom: 6px; }
 #story-card strong { color: var(--gold); }
@@ -496,3 +496,19 @@ code { background: #08070e; padding: 2px 8px; border: 1px solid var(--line); use
 #tracker .q.tracked { background: rgba(255, 214, 10, 0.07); }
 #tracker .trkbar { display: flex; gap: 6px; margin-top: 6px; padding-left: 10px; }
 #bigmap { max-height: 72vh; }
+
+body.results-open #choice { display: none; }
+#story-card { max-height: 34vh; }
+
+/* ---------- phones ---------- */
+@media (max-width: 700px) {
+  #story-card { width: 92vw; top: 150px; font-size: 14px; padding: 12px 16px; max-height: 28vh; }
+  #dpad { left: auto; right: 12px; bottom: 96px; opacity: 0.7; }
+  #log { max-width: calc(100vw - 24px); }
+  #tracker { max-width: 46vw; }
+  #flow .lbl { font-size: 11px; }
+  #flow .pips i { width: 12px; }
+  #battle-menu { width: 98vw; }
+  .abilities { grid-template-columns: repeat(2, 1fr); }
+  #results .rt { font-size: 34px; }
+}

@@ -122,6 +122,12 @@ func NewServer(eng *engine.Engine, static fs.FS) *Server {
 		return eng.UseAbilityOutOfCombat(t, req.Ability, req.Target)
 	})
 	if os.Getenv("DND_DEBUG") != "" {
+		s.mux.HandleFunc("/api/debug/clock", func(w http.ResponseWriter, r *http.Request) {
+			var req struct{ Hour float64 }
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)
+			eng.DebugClock(req.Hour)
+			reply(w, nil)
+		})
 		s.mux.HandleFunc("/api/debug/tp", func(w http.ResponseWriter, r *http.Request) {
 			var req struct{ Where string }
 			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)

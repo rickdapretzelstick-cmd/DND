@@ -48,7 +48,11 @@ function currentTarget() {
   };
   let q = mineQ.find((x) => x.id === trackedId);
   if (!q) { let bd = 1e9; for (const x of mineQ) { const p = pos(x), d = Math.hypot(p.x - me.x, p.y - me.y); if (d < bd) { bd = d; q = x; } } }
-  if (!q) return null;
+  if (!q) {
+    let best = null, bd = 1e9;
+    for (const n of npcList()) if (S.markers?.[n.id] === "!") { const d = Math.hypot(n.x - me.x, n.y - me.y); if (d < bd) { bd = d; best = n; } }
+    return best ? { x: best.x, y: best.y, label: "Talk to " + best.name, kind: "main" } : null;
+  }
   const p = pos(q);
   return { x: p.x, y: p.y, label: q.stage === "return" ? "Report to " + (q.giverName || "giver") : q.objective, kind: q.kind, quest: q };
 }
@@ -140,6 +144,8 @@ async function onState(snap) {
   const prevCombat = S?.combat;
   S = snap;
   window.__S = S;
+  window.__roamers = () => [...roamers.values()].map((r) => ({ id: r.id, k: r.k, x: r.x, y: r.y, c: r.c, e: r.e }));
+  window.__pos = () => { const c = myChar(), e = c && ents.get(c.id); return e ? [e.x, e.y] : null; };
   if (!myPlayer()) { api("/api/join", { name: me.name || "Sorcerer", token }).catch(() => {}); return; }
   if (worldSeed !== S.seed) {
     worldSeed = S.seed;
@@ -233,6 +239,34 @@ function renderLog() {
   if (near || $("#log").classList.contains("collapsed")) box.scrollTop = box.scrollHeight;
 }
 
+function renderTracker() {
+  const mine = S && myChar();
+  if (!S || !mine || !world) return;
+  const active = S.quests.filter((q) => (q.stage === "active" || q.stage === "return") && (!q.for || q.for === mine?.id));
+  const me0 = ents.get(mine?.id);
+  const dir8 = (dx, dy) => ["E", "SE", "S", "SW", "W", "NW", "N", "NE"][Math.round(((Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
+  const tg = currentTarget();
+  const hot = tg?.quest?.id;
+  let tHtml = active.length ? active.map((q) => {
+    const tx = q.stage === "return" ? (npcList().find((n) => n.id === q.giver) || q) : { x: q.x, y: q.y };
+    const dist = me0 ? Math.round(Math.hypot(tx.x - me0.x, tx.y - me0.y)) : 0;
+    const where = me0 ? `<span class="where">${dist < 6 ? "here" : dist + " m " + dir8(tx.x - me0.x, tx.y - me0.y)}</span>` : "";
+    const cur = (q.steps || []).findIndex((x) => !x.done);
+    const steps = (q.steps || []).length ? `<ol class="steps">${q.steps.map((st, i) => `<li class="${st.done ? "done" : cur === i ? "now" : ""}">${st.done ? "✔" : cur === i ? "➤" : "·"} ${esc(st.text)}</li>`).join("")}</ol>` : `<div>${esc(q.objective)}</div>`;
+    return `<div class="q ${q.kind} ${hot === q.id ? "tracked" : ""}" data-q="${q.id}" title="Click to track this quest"><b>${hot === q.id ? "◎ " : ""}${esc(q.title)}</b><span class="st">${q.stage === "return" ? "Report to " + esc(q.giverName || "giver") : "Active"}</span> ${where}${steps}</div>`;
+  }).join("") : "";
+  if (!active.length && me0) {
+    const jobs = npcList().filter((n) => S.markers?.[n.id] === "+" || S.markers?.[n.id] === "!").map((n) => ({ n, d: Math.hypot(n.x - me0.x, n.y - me0.y) })).sort((a, b) => a.d - b.d)[0];
+    tHtml = S.started ? `<div class="muted">No active quests.${jobs ? `<br><b style="color:#ffd166">${S.markers[jobs.n.id] === "!" ? "❗" : "➕"} ${esc(jobs.n.name)}</b> needs someone — ${Math.round(jobs.d)} m ${dir8(jobs.n.x - me0.x, jobs.n.y - me0.y)}.` : ""}<br>Ask anyone “any odd jobs?”, or open the Map (M) to see who's hiring.</div>` : `<div class="muted">Waiting for the host to begin the story…</div>`;
+  }
+  tHtml += `<div class="trkbar"><button class="mini" id="trk-route">${showRoute ? "🧭 Route: on" : "🧭 Route: off"} (G)</button>${waypoint ? '<button class="mini" id="trk-wp">✖ Clear waypoint</button>' : ""}</div>`;
+  $("#tracker").innerHTML = tHtml;
+  $$("#tracker [data-q]").forEach((el) => (el.onclick = () => { trackedId = el.dataset.q; waypoint = null; localStorage.setItem("jjk_tracked", trackedId); routeCache.key = ""; renderHUD(); }));
+  const tr = $("#trk-route"); if (tr) tr.onclick = toggleRoute;
+  const tw = $("#trk-wp"); if (tw) tw.onclick = () => { waypoint = null; routeCache.key = ""; renderHUD(); };
+}
+setInterval(() => { try { renderTracker(); } catch (e) { /* not ready */ } }, 700);
+
 function pumpStory() {
   const card = $("#story-card");
   const mine = S && myChar();
@@ -272,29 +306,7 @@ function renderHUD() {
   // Clock & DM badge
   $("#dm-badge").textContent = S.ai ? (S.model?.startsWith("ollama:") ? "🖥️ Local AI DM" : "🧠 AI DM") : "🎲 Offline DM";
   $("#dm-badge").title = S.ai ? "The AI Dungeon Master is narrating — do anything." : "Offline DM. The host can enable the AI DM for free-form play.";
-  // Tracker
-  const active = S.quests.filter((q) => (q.stage === "active" || q.stage === "return") && (!q.for || q.for === mine?.id));
-  const me0 = ents.get(mine?.id);
-  const dir8 = (dx, dy) => ["E", "SE", "S", "SW", "W", "NW", "N", "NE"][Math.round(((Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
-  const tg = currentTarget();
-  const hot = tg?.quest?.id;
-  let tHtml = active.length ? active.map((q) => {
-    const tx = q.stage === "return" ? (npcList().find((n) => n.id === q.giver) || q) : { x: q.x, y: q.y };
-    const dist = me0 ? Math.round(Math.hypot(tx.x - me0.x, tx.y - me0.y)) : 0;
-    const where = me0 ? `<span class="where">${dist < 6 ? "here" : dist + " m " + dir8(tx.x - me0.x, tx.y - me0.y)}</span>` : "";
-    const cur = (q.steps || []).findIndex((x) => !x.done);
-    const steps = (q.steps || []).length ? `<ol class="steps">${q.steps.map((st, i) => `<li class="${st.done ? "done" : cur === i ? "now" : ""}">${st.done ? "✔" : cur === i ? "➤" : "·"} ${esc(st.text)}</li>`).join("")}</ol>` : `<div>${esc(q.objective)}</div>`;
-    return `<div class="q ${q.kind} ${hot === q.id ? "tracked" : ""}" data-q="${q.id}" title="Click to track this quest"><b>${hot === q.id ? "◎ " : ""}${esc(q.title)}</b><span class="st">${q.stage === "return" ? "Report to " + esc(q.giverName || "giver") : "Active"}</span> ${where}${steps}</div>`;
-  }).join("") : "";
-  if (!active.length && me0) {
-    const jobs = npcList().filter((n) => S.markers?.[n.id] === "+" || S.markers?.[n.id] === "!").map((n) => ({ n, d: Math.hypot(n.x - me0.x, n.y - me0.y) })).sort((a, b) => a.d - b.d)[0];
-    tHtml = S.started ? `<div class="muted">No active quests.${jobs ? `<br><b style="color:#ffd166">${S.markers[jobs.n.id] === "!" ? "❗" : "➕"} ${esc(jobs.n.name)}</b> needs someone — ${Math.round(jobs.d)} m ${dir8(jobs.n.x - me0.x, jobs.n.y - me0.y)}.` : ""}<br>Ask anyone “any odd jobs?”, or open the Map (M) to see who's hiring.</div>` : `<div class="muted">Waiting for the host to begin the story…</div>`;
-  }
-  tHtml += `<div class="trkbar"><button class="mini" id="trk-route">${showRoute ? "🧭 Route: on" : "🧭 Route: off"} (G)</button>${waypoint ? '<button class="mini" id="trk-wp">✖ Clear waypoint</button>' : ""}</div>`;
-  $("#tracker").innerHTML = tHtml;
-  $$("#tracker [data-q]").forEach((el) => (el.onclick = () => { trackedId = el.dataset.q; waypoint = null; localStorage.setItem("jjk_tracked", trackedId); routeCache.key = ""; renderHUD(); }));
-  const tr = $("#trk-route"); if (tr) tr.onclick = toggleRoute;
-  const tw = $("#trk-wp"); if (tw) tw.onclick = () => { waypoint = null; routeCache.key = ""; renderHUD(); };
+  renderTracker();
   // Battle UI
   renderBattleUI();
   maybeShowResults();
@@ -443,9 +455,11 @@ function maybeShowResults() {
     ${r.slain?.length ? `<div class="rl">${r.slain.map((n) => `<span>👹 ${esc(n)}</span>`).join("")}</div>` : ""}
     <div class="rr"><div><b>+${r.xp}</b><small>XP</small></div><div><b>¥${(r.yen || 0).toLocaleString()}</b><small>YEN</small></div></div>
     <div class="rh">click to continue</div>`;
-  box.onclick = () => box.classList.add("hidden");
+  document.body.classList.add("results-open");
+  const close = () => { box.classList.add("hidden"); document.body.classList.remove("results-open"); };
+  box.onclick = close;
   clearTimeout(maybeShowResults.t);
-  maybeShowResults.t = setTimeout(() => box.classList.add("hidden"), 7000);
+  maybeShowResults.t = setTimeout(close, 6000);
 }
 
 function useAbility(id) {
@@ -894,7 +908,7 @@ function frame(now) {
   const list = [];
   const markers = S.markers || {};
   nearNPC = null;
-  let bestD = 2.3;
+  let bestD = 3.0;
   for (const n of npcList()) {
     const d = Math.hypot(n.x - me2.x, n.y - me2.y);
     if (d < bestD) { bestD = d; nearNPC = n; }

@@ -390,7 +390,7 @@ export class BattleView {
       ctx.font = "800 12px system-ui, sans-serif";
       const nw = ctx.measureText(nm).width;
       const bw = Math.max(96, w * 0.9, nw + 62);
-      const by = p.y - h - 22;
+      const by = Math.max(p.y - h - 22, 112);
       const bx = p.x - bw / 2;
       ctx.fillStyle = "rgba(8,6,16,0.82)";
       ctx.beginPath(); ctx.moveTo(bx - 4, by - 17); ctx.lineTo(bx + Math.max(bw, nw + 18) + 4, by - 17); ctx.lineTo(bx + Math.max(bw, nw + 18) - 4, by + 11); ctx.lineTo(bx - 4, by + 11); ctx.closePath(); ctx.fill();

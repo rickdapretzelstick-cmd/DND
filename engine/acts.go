@@ -530,11 +530,11 @@ func (e *Engine) epilogue() {
 func scaleP(base, per, size int) int { return base + per*min(size-1, 3) }
 
 func act1Encounter(size int) []Spawn {
-	return []Spawn{{Type: "finger_bearer", Count: 1, Power: scaleP(18, 8, size)}, {Type: "fly_head", Count: max(1, min(size-1, 2))}}
+	return []Spawn{{Type: "finger_bearer", Count: 1, Power: scaleP(42, 8, size)}, {Type: "fly_head", Count: max(1, min(size-1, 2))}}
 }
 
 func act2Encounter(size int) []Spawn {
-	return []Spawn{{Type: "mahito", Count: 1, Power: scaleP(16, 7, size), Name: "Mahito"}, {Type: "transfigured", Count: max(1, min(size-1, 2))}}
+	return []Spawn{{Type: "mahito", Count: 1, Power: scaleP(34, 7, size), Name: "Mahito"}, {Type: "transfigured", Count: max(1, min(size-1, 2))}}
 }
 
 func act3Jogo(size int) []Spawn {
