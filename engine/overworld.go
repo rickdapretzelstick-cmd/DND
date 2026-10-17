@@ -36,7 +36,7 @@ func (e *Engine) Move(token string, x, y float64, dir int, moving bool) (float64
 	if math.Hypot(x-ch.X, y-ch.Y) > maxStep || !e.W.Walkable(x, y) {
 		return ch.X, ch.Y, fmt.Errorf("blocked")
 	}
-	ch.X, ch.Y, ch.Dir, ch.Moving = x, y, dir&3, moving
+	ch.X, ch.Y, ch.Dir, ch.Moving = x, y, dir&7, moving
 	e.posDirty = true
 	e.onArrive(ch)
 	return ch.X, ch.Y, nil

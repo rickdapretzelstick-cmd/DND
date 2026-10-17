@@ -689,7 +689,7 @@ function moveMe(dt) {
     const ok = (x, y) => world.walkable(x - 0.28, y) && world.walkable(x + 0.28, y) && world.walkable(x - 0.28, y - 0.25) && world.walkable(x + 0.28, y - 0.25);
     if (ok(e.x + dx * step, e.y)) e.x += dx * step;
     if (ok(e.x, e.y + dy * step)) e.y += dy * step;
-    e.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
+    e.dir = dx && dy ? (dy > 0 ? (dx < 0 ? 4 : 5) : (dx < 0 ? 6 : 7)) : dx ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
   }
   e.moving = moving;
   e.tx = e.x; e.ty = e.y;

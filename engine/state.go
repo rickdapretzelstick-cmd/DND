@@ -50,7 +50,7 @@ type Character struct {
 
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
-	Dir    int     `json:"dir"` // 0 down, 1 left, 2 right, 3 up
+	Dir    int     `json:"dir"` // 0 down, 1 left, 2 right, 3 up, 4 SW, 5 SE, 6 NW, 7 NE
 	Moving bool    `json:"moving"`
 
 	Status     map[string]int `json:"status"`

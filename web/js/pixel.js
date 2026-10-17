@@ -107,7 +107,9 @@ export function charSprite(look, dir = 0, frame = 0) {
     return m;
   }
   const [cv, ctx] = makeCanvas(CHAR_W, CHAR_H);
-  drawChar(ctx, look || {}, dir, frame);
+  // dirs 4..7 are diagonal 3/4 views: 4 SW, 5 SE (front-ish), 6 NW, 7 NE (back-ish)
+  if (dir >= 4) drawChar(ctx, look || {}, dir < 6 ? 0 : 3, frame, dir & 1 ? 1 : -1);
+  else drawChar(ctx, look || {}, dir, frame);
   outline(cv);
   ctx.fillStyle = "rgba(8,6,20,0.3)";
   ctx.beginPath(); ctx.ellipse(12, 34, 7.5, 1.7, 0, 0, Math.PI * 2); ctx.fill();
@@ -116,7 +118,7 @@ export function charSprite(look, dir = 0, frame = 0) {
   return cv;
 }
 
-function drawChar(ctx, L, dir, frame) {
+function drawChar(ctx, L, dir, frame, tq = 0) {
   const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
   const skin = SKIN[L.skin ?? 1] || SKIN[1], skinD = shade(skin, -0.16), skinL = shade(skin, 0.12);
   const hair = L.hairColor || "#1b1b1b", hairD = shade(hair, -0.35), hairL = shade(hair, 0.3);
@@ -165,6 +167,7 @@ function drawChar(ctx, L, dir, frame) {
   }
 
   // ---- torso ----
+  if (tq) ctx.translate(tq, 0);
   const tc = outfit === 6 ? "#eceff2" : c1;
   R(bx + 2, ty, bw - 4, 1, tc); R(bx + 1, ty + 1, bw - 2, 1, tc); R(bx, ty + 2, bw, torsoH - 2, tc);   // rounded shoulders
   R(bx, ty + 1, 2, torsoH - 1, shade(tc, 0.12)); R(bx + bw - 2, ty + 1, 2, torsoH - 1, shade(tc, -0.2));
@@ -224,6 +227,7 @@ function drawChar(ctx, L, dir, frame) {
   if (side) { /* hair mass behind head for side view */ backHair(); }
 
   // ---- head ----
+  if (tq) ctx.translate(tq, 0);
   const rows = [8, 12, 14, 16, 16, 16, 16, 15, 14, 11, 8, 4];
   const hw = side ? 14 : 16;
   const hx0 = side ? 5 : 4;
@@ -253,6 +257,11 @@ function drawChar(ctx, L, dir, frame) {
     R(5, ey - 2, 4, 1, hairD); R(15, ey - 2, 4, 1, hairD);              // brows
     R(11, hy + 10, 2, 1, shade(skin, -0.38));                            // mouth
     R(5, hy + 9, 2, 1, "rgba(255,130,130,0.35)"); R(17, hy + 9, 2, 1, "rgba(255,130,130,0.35)");
+    if (tq) {                                                            // 3/4 turn: narrow the far eye, add a nose
+      const fx = tq > 0 ? 6 : 16;
+      R(fx, ey - 1, 2, 6, skin); R(tq > 0 ? 5 : 17, ey - 2, 3, 1, skin);
+      R(tq > 0 ? 17 : 6, hy + 8, 1, 2, skinD); R(tq > 0 ? 18 : 5, hy + 8, 1, 3, skinD);
+    }
   } else if (side) {
     eye(7);
     R(6, ey - 2, 4, 1, hairD);
