@@ -135,7 +135,7 @@ export class BattleView {
   hitTest(mx, my) {
     for (const [id, p] of Object.entries(this.layout)) {
       const r = p.party ? 12 * p.scale : 14 * p.scale;
-      if (Math.abs(mx - p.x) < r && my < p.y + 10 && my > p.y - (p.party ? 26 : 30) * p.scale) return id;
+      if (Math.abs(mx - p.x) < r && my < p.y + 10 && my > p.y - (p.party ? 38 : 30) * p.scale) return id;
     }
     return null;
   }
@@ -208,7 +208,7 @@ export class BattleView {
   }
 
   vfxAt(kind, vfx, s, t, color, now, h) {
-    const tx = t.x, ty = t.y - (t.party ? 12 : 14) * t.scale;
+    const tx = t.x, ty = t.y - (t.party ? 18 : 14) * t.scale;
     const sx = s ? s.x : tx, sy = s ? s.y - 12 * s.scale : ty - 200;
     switch (kind) {
       case "beam":
@@ -259,7 +259,7 @@ export class BattleView {
 
   impact(h, t, color, bf) {
     const now = performance.now();
-    const ty = t.y - (t.party ? 12 : 14) * t.scale;
+    const ty = t.y - (t.party ? 18 : 14) * t.scale;
     const a = (this.anim[h.id] = { ...(this.anim[h.id] || {}) });
     if (h.miss) {
       this.texts.push(txt(t.x, ty - 20, h.status === "nullified" ? "NULLIFIED" : h.saved ? "RESISTED" : "MISS", "#ced4da", 18, now));
@@ -327,7 +327,7 @@ export class BattleView {
         hp = ch.hp; max = ch.maxHp; name = ch.name;
         const down = ch.hp <= 0 || ch.dead;
         spr = charSprite(ch.look, 2, 0);
-        w = 16 * p.scale; h = 24 * p.scale;
+        w = 24 * p.scale; h = 36 * p.scale;
         if (ch.fled) alpha = 0.25;
         ctx.save();
         ctx.globalAlpha = alpha;

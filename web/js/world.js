@@ -243,7 +243,7 @@ export class WorldView {
 export function drawCharacter(ctx, sx, sy, zoom, look, dir, moving, now, opts = {}) {
   const frame = moving ? Math.floor(now / 140) % 4 : 0;
   const spr = charSprite(look, dir, frame);
-  const w = 16 * zoom, h = 24 * zoom;
+  const w = 24 * zoom, h = 36 * zoom;
   const x = Math.round(sx - w / 2), y = Math.round(sy - h + 2 * zoom);
   if (opts.aura) {
     ctx.fillStyle = opts.aura;

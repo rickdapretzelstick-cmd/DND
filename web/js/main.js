@@ -218,8 +218,8 @@ $("#log-head").onclick = () => { $("#log").classList.toggle("collapsed"); $("#lo
 function hpClass(f) { return f > 0.5 ? "" : f > 0.25 ? "mid" : "low"; }
 
 function portrait(look, size = 40) {
-  const [c, ctx] = makeCanvas(16, 16);
-  ctx.drawImage(charSprite(look, 0, 0), 0, -1);
+  const [c, ctx] = makeCanvas(24, 24);
+  ctx.drawImage(charSprite(look, 0, 0), 0, 0);
   return c.toDataURL();
 }
 
