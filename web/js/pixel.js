@@ -148,24 +148,25 @@ function drawChar(ctx, L, dir, frame) {
   const pants = outfit === 3 ? "#3a5a8c" : outfit === 6 ? "#2b2d42" : outfit === 5 ? shade(c1, -0.1) : shade(c1, -0.12);
   const shoe = "#16141c", shoeL = "#33303c";
   const lo = step === 1 ? -1 : step === 3 ? 1 : 0;   // leg lift offset
+  const lift = 2;
   if (side) {
     const s1 = step === 1 ? -2 : step === 3 ? 2 : 0;
     R(9 + s1, 27 + bob, 5, 6, shade(pants, -0.18)); R(9 + s1, 32 + bob, 6, 2, shoe);
     R(11 - s1, 27 + bob, 5, 6, pants); R(11 - s1, 27 + bob, 1, 6, shade(pants, 0.12)); R(10 - s1, 32 + bob, 6, 2, shoe); R(10 - s1, 32 + bob, 6, 1, shoeL);
   } else if (outfit !== 7) {
     const lx = 12 - Math.floor(bw / 2) + 1;
-    R(lx, 27 + bob, 4, 6 - (lo === -1 ? 1 : 0), pants); R(lx, 27 + bob, 1, 6, shade(pants, 0.1));
-    R(lx - 1, 32 + bob - (lo === -1 ? 1 : 0), 5, 2, shoe); R(lx - 1, 32 + bob - (lo === -1 ? 1 : 0), 5, 1, shoeL);
+    R(lx, 27 + bob, 4, 6 - (lo === -1 ? lift : 0), pants); R(lx, 27 + bob, 1, 6, shade(pants, 0.1));
+    R(lx - 1, 32 + bob - (lo === -1 ? lift : 0), 5, 2, shoe); R(lx - 1, 32 + bob - (lo === -1 ? lift : 0), 5, 1, shoeL);
     const rx = 12 + Math.floor(bw / 2) - 5;
-    R(rx, 27 + bob, 4, 6 - (lo === 1 ? 1 : 0), shade(pants, -0.14)); R(rx + 3, 27 + bob, 1, 6, shade(pants, -0.3));
-    R(rx, 32 + bob - (lo === 1 ? 1 : 0), 5, 2, shoe); R(rx, 32 + bob - (lo === 1 ? 1 : 0), 5, 1, shoeL);
+    R(rx, 27 + bob, 4, 6 - (lo === 1 ? lift : 0), shade(pants, -0.14)); R(rx + 3, 27 + bob, 1, 6, shade(pants, -0.3));
+    R(rx, 32 + bob - (lo === 1 ? lift : 0), 5, 2, shoe); R(rx, 32 + bob - (lo === 1 ? lift : 0), 5, 1, shoeL);
   } else {
     R(9 - lo, 32 + bob, 3, 2, "#6b4a2b"); R(14 + lo, 32 + bob, 3, 2, "#6b4a2b");
   }
 
   // ---- torso ----
   const tc = outfit === 6 ? "#eceff2" : c1;
-  R(bx + 1, ty, bw - 2, 1, tc); R(bx, ty + 1, bw, torsoH - 1, tc);   // rounded shoulders
+  R(bx + 2, ty, bw - 4, 1, tc); R(bx + 1, ty + 1, bw - 2, 1, tc); R(bx, ty + 2, bw, torsoH - 2, tc);   // rounded shoulders
   R(bx, ty + 1, 2, torsoH - 1, shade(tc, 0.12)); R(bx + bw - 2, ty + 1, 2, torsoH - 1, shade(tc, -0.2));
   R(bx, ty + torsoH - 1, bw, 1, shade(tc, -0.3));
   if (front) {
@@ -223,7 +224,7 @@ function drawChar(ctx, L, dir, frame) {
   if (side) { /* hair mass behind head for side view */ backHair(); }
 
   // ---- head ----
-  const rows = [8, 12, 14, 16, 16, 16, 16, 16, 16, 15, 13, 10];
+  const rows = [8, 12, 14, 16, 16, 16, 16, 15, 14, 11, 8, 4];
   const hw = side ? 14 : 16;
   const hx0 = side ? 5 : 4;
   R(10, hy + 11, 4, 3, skinD);                       // neck
@@ -313,7 +314,7 @@ function drawChar(ctx, L, dir, frame) {
     switch (st.bang) {
       case "part": R(bx0, by, 7, 2, hair); R(bx0 + 1, by + 2, 4, 1, hair);
         if (!side) { R(13, by, 7, 2, hair); R(15, by + 2, 4, 1, hair); } break;
-      case "straight": R(bx0, by, fw, 2, hair); R(bx0 + 1, by + 2, fw - 2, 1, hair); break;
+      case "straight": R(bx0, by, fw, 2, hair); for (let i = 0; i < fw; i += 4) R(bx0 + i, by + 2, 2, 1, hair); break;
       case "spiky": for (let i = 0; i < (side ? 3 : 5); i++) { const x = bx0 + 1 + i * 3, l = 3 + (i % 2); R(x, by, 3, 1, hair); R(x, by + 1, 2, l - 1, hair); R(x, by + l - 1, 1, 1, hairD); } break;
       case "swoop": R(bx0, by, fw, 2, hair); R(bx0, by + 2, side ? 8 : 9, 2, hair); R(bx0, by + 4, 4, 1, hairD); break;
       case "slick": R(bx0 + 1, by - 1, fw - 2, 1, hairL); break;
