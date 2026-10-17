@@ -92,7 +92,7 @@ func (c *Character) RecalcAC() {
 	if c.Class == "heavenly_restriction" {
 		ac += 2
 	}
-	c.AC = ac
+	c.AC = ac + c.Passive("ac")
 }
 
 func (c *Character) AttackStat(w Item) string {
@@ -167,6 +167,11 @@ func (c *Character) KnownAbilities() []Ability {
 	}
 	if d, ok := AbilityList[t.Domain]; ok && c.Level >= d.MinLevel {
 		out = append(out, d)
+	}
+	for _, cs := range c.Custom {
+		if cs.Kind == "active" && cs.Ability != nil {
+			out = append(out, *cs.Ability)
+		}
 	}
 	return out
 }
@@ -256,7 +261,7 @@ func (c *Character) Check(skillOrAbility string, dc, adv int) CheckResult {
 			bonus += c.Prof()
 		}
 	}
-	bonus += c.Mod(ab)
+	bonus += c.Mod(ab) + c.Passive("skill:"+key)
 	roll, dice := D20(adv)
 	total := roll + bonus
 	return CheckResult{Name: c.Name, Label: label + " check", Roll: roll, Dice: dice, Bonus: bonus, Total: total,

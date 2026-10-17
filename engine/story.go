@@ -122,6 +122,7 @@ func (e *Engine) Interact(token, npcID string) (*Dialog, error) {
 	d := e.npcDialog(ch, n, ctx)
 	e.dialogs[p.ID] = ctx
 	e.npcState(n.ID).Talked++
+	e.questEvent("talk", ch, n.ID)
 	return d, nil
 }
 
@@ -194,6 +195,9 @@ func (e *Engine) npcDialog(ch *Character, n *NPC, ctx *dialogCtx) *Dialog {
 		d.opt("🚗 Could you drive us somewhere?", "travel", ctx)
 	case "monk":
 		d.opt("🙏 Ask for a blessing", "blessing", ctx)
+	}
+	if q := e.questFrom(n.ID, "ai"); q == nil {
+		d.opt("🤝 Offer to help out — any odd jobs?", "improv", ctx)
 	}
 	d.opt("🗨️ Rumors?", "rumor", ctx)
 	d.opt("💬 Say something...", "free", ctx)
@@ -276,6 +280,23 @@ func (e *Engine) dialogAction(ch *Character, n *NPC, act string, ctx *dialogCtx)
 		return d
 	case "rumor":
 		return back(e.rumor(n))
+	case "improv":
+		if e.AIActive() {
+			ask := "I'd like to help out around here. Do you have any work, favors or odd jobs for me?"
+			e.Log("action", ch.Name, "to "+n.Name+": "+ask)
+			e.enqueue(DMEvent{Kind: "talk", Summary: n.ID, Actions: []PendingAction{{CharID: ch.ID, CharName: ch.Name, Text: ask}}})
+			d := e.newDialog(n, "(You offer to help. Listen to what they say in the story log...)")
+			d.opt("👋 Close", "close", ctx)
+			return d
+		}
+		q, line := e.ImprovQuest(ch, n, "")
+		if q == nil {
+			return back(line)
+		}
+		d := e.newDialog(n, line+"\n\nJob: "+q.Title+stepsList(q.Steps)+fmt.Sprintf("\n\nReward: %d XP, ¥%s", q.RewardXP, commas(q.RewardYen)))
+		d.opt("✅ I'm in.", "accept:"+q.ID, ctx)
+		d.opt("Maybe later.", "decline:"+q.ID, ctx)
+		return d
 	case "story":
 		return e.storyAction(ch, n, arg, ctx)
 	case "sidequest":
@@ -407,6 +428,9 @@ func (e *Engine) price(base int) int {
 	case civ <= -3:
 		p = p * 130 / 100
 	}
+	if d := e.bestDiscount(); d > 0 {
+		p = p * (100 - d) / 100
+	}
 	return max(100, p)
 }
 
@@ -446,6 +470,7 @@ func (e *Engine) buy(ch *Character, n *NPC, id string) string {
 	}
 	ch.Gold -= p
 	ch.AddItem(it)
+	defer e.questEvent("items", ch, "")
 	e.Log("system", ch.Name, fmt.Sprintf("🛒 %s buys %s for ¥%s.", ch.Name, it.Name, commas(p)))
 	return "Thank you! " + it.Name + " is yours."
 }
@@ -652,6 +677,10 @@ func (e *Engine) turnIn(ch *Character, n *NPC, id string) string {
 	if q == nil || q.Stage != "return" {
 		return ""
 	}
+	if len(q.Steps) > 0 {
+		e.payQuest(q, ch)
+		return pickS(rngTL(), []string{"Thank you — you were a real help.", "Couldn't have done it without you.", "Well done. Truly."})
+	}
 	q.Stage = "done"
 	party := e.partyNear(ch, 12)
 	e.awardXPTo(party, q.RewardXP, "quest: "+q.Title)
@@ -698,6 +727,17 @@ func (e *Engine) afterBattle(cb *Combat, outcome string, party []*Character) {
 		return
 	}
 	if outcome != "victory" && outcome != "surrender" && outcome != "truce" {
+		return
+	}
+	if len(q.Steps) > 0 {
+		if q.Site != "" {
+			e.C.Cleared[q.Site] = true
+		}
+		var who *Character
+		if len(party) > 0 {
+			who = party[0]
+		}
+		e.questEvent("victory", who, q.ID)
 		return
 	}
 	q.Stage = "return"

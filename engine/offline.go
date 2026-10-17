@@ -138,31 +138,16 @@ func (d *OfflineDM) npcReply(e *Engine, ch *Character, n *NPC, text string) {
 	t := strings.ToLower(text)
 	say := func(line string) { e.Log("say", n.Name, line) }
 	switch {
-	case reJob.MatchString(t):
-		switch n.Role {
-		case "guard":
-			if ch.Title == "" {
-				res := ch.Check("persuasion", 13, 0)
-				e.Log("roll", ch.Name, "🎲 "+res.String())
-				if res.Success {
-					t := e.W.Town(n.Town)
-					ch.Title = "Honorary Officer of " + t.Name
-					say(fmt.Sprintf("Honestly? We could use someone who can see what's out there at night. I'll vouch for you — Honorary Officer %s. Don't make me regret it.", ch.Name))
-					e.Log("system", ch.Name, "🏅 "+ch.Name+" is now "+ch.Title+".")
-				} else {
-					say("You? A cop? You're a kid with a weird school uniform. Come back with a recommendation from the mayor.")
-				}
-				return
-			}
-			say("You've already got a badge, officer. Go patrol.")
-		case "elder", "nanami":
-			say("Work? I always have work for a sorcerer. Ask me about curse trouble.")
-		case "gojo":
-			say("A job? You already have one — being my cute student~ But sure, the mayors in town always need help.")
-		case "shop", "inn":
-			say("Hiring? Ha! Business is slow since people started disappearing. Fix that and maybe.")
-		default:
-			say("Me? I'm not hiring. Try the mayor — they're always asking for help.")
+	case reJob.MatchString(t) || reErrand.MatchString(t) || reHunt.MatchString(t) || reMystery.MatchString(t) || reMentor.MatchString(t):
+		if q := e.questFrom(n.ID, "ai"); q != nil && (q.Stage == "active" || q.Stage == "return") {
+			say("We already have something going: \""+q.Title+"\". Finish that first.")
+			return
+		}
+		q, line := e.ImprovQuest(ch, n, text)
+		say(line)
+		if q != nil {
+			q.Stage = "active"
+			e.Log("system", ch.Name, fmt.Sprintf("📜 New quest: %s — %s", q.Title, q.Objective))
 		}
 	case reShop.MatchString(t):
 		if n.Role == "shop" || n.Role == "maki" || n.Role == "mercenary" {

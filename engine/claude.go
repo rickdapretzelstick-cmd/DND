@@ -47,6 +47,9 @@ Make the world feel alive and reactive:
 - When a player wants a role ("I want to become a guard", "I'll work at the café"), make it happen through play: a check, an interview, a task — and then set_title so it shows on their character.
 - When a player wants to go somewhere specific, either describe the route or use move_party if they're traveling a long distance (Ijichi can drive them).
 - Spin side stories out of anything players care about: create_quest puts a marker on their map and a real battle at the location.
+- QUESTS ARE IMPROVISED. When a player pursues a goal that doesn't exist yet — "I'll be the nurse's assistant", "I want to open a stall", "who's been stealing from the shrine?", "teach me to fight", "find my lost cat" — DON'T just narrate it: build it. Call create_quest with 2-6 steps made from real things around them (NPC ids from the roster, towns, sites, shops), mixing step types: talk to someone, fetch/deliver an item (hand out a custom quest item with give_on_done), wait for time to pass, go somewhere, defeat a curse (invent a fitting one with create_curse). The engine tracks the steps and moves the map marker; you only narrate. Set for_character_id for personal jobs and report_to_giver so the NPC pays out.
+- Jobs and feats should earn something that fits the fiction: a title (reward_title or set_title) and a fabricated perk (reward_skill / create_skill) — silly but useful: a nurse's assistant gets 'Bedside Manner' (healing +2); a shop hand gets 'Haggler' (cheaper shops); a night watchman gets 'Night Eyes'. The engine caps the numbers, so be creative with names and descriptions, not with power.
+- Quests can change: use add_quest_step when the plot thickens, update_quest to rewrite it, complete_quest_step for 'custom' steps you judge done, abandon_quest if it no longer makes sense.
 - Big decisions that affect the whole party should go through offer_choice so everyone sees the options.
 
 ## Rules the engine enforces
@@ -134,6 +137,33 @@ var curseList = map[string]any{"type": "array", "items": map[string]any{"type": 
 	"power": intg("Optional strength percent (30-100) for story bosses"),
 }, "required": []string{"type", "count"}}}
 
+var questStepSchema = map[string]any{"type": "object", "properties": map[string]any{
+	"text":         str("What the player sees, e.g. 'Fetch the bandages from the general store'"),
+	"type":         enum("Step type", "goto", "talk", "deliver", "collect", "defeat", "wait", "custom"),
+	"target":       str("goto/defeat: a town/site/NPC id. talk/deliver: an NPC id. collect: optional place"),
+	"item":         str("collect/deliver: item id or name (quest items you hand out count)"),
+	"count":        intg("collect/deliver quantity (default 1)"),
+	"hours":        intg("wait: in-game hours (1 hour ≈ 50 real seconds)"),
+	"curses":       curseList,
+	"give_on_done": str("Name of a custom quest item handed to the player when this step completes"),
+	"say":          str("A line the target NPC speaks when a talk/deliver step completes"),
+}, "required": []string{"text", "type"}}
+
+var questSteps = map[string]any{"type": "array", "items": questStepSchema, "description": "Ordered steps. goto = walk there; talk = speak to NPC; deliver = give an item to NPC; collect = have an item; defeat = win the battle at the place; wait = time passes; custom = you decide when it's done (complete_quest_step)."}
+
+var skillSpecSchema = map[string]any{"type": "object", "properties": map[string]any{
+	"name": str("Skill name (short, can be funny)"), "description": str("What it is in the fiction"),
+	"kind":   enum("passive or active", "passive", "active"),
+	"mod":    enum("Passive effect", "skill", "ac", "hp", "ce", "init", "heal", "damage", "discount"),
+	"skill":  str("For mod=skill: which skill (medicine, persuasion, athletics...)"),
+	"amount": intg("Passive strength (capped by the engine; usually 1-2)"),
+	"effect": enum("Active effect", "damage", "heal", "buff", "debuff", "stun"),
+	"status": str("buff: guard/empowered/regen/haste; debuff: exposed/weakened/marked"),
+	"power":  intg("Active power 1-3 (more power costs more CE, fewer uses)"),
+	"vfx":    str("Optional visual: punch, slash, beam, heal, shield, stare, wail, claw, bite, lightning, voice, clap, aura_gold"),
+	"color":  str("Optional hex color"),
+}, "required": []string{"name", "kind"}}
+
 var dmTools = func() []anthropic.BetaToolUnionParam {
 	charID := str("Character id, e.g. c3")
 	where := str("A character id, town id (e.g. t2, city, high) or site id (e.g. s4)")
@@ -194,11 +224,32 @@ var dmTools = func() []anthropic.BetaToolUnionParam {
 		}, "name", "description", "near")),
 		tool("remove_npc", "An NPC leaves, dies or vanishes.", schema(map[string]any{"npc_id": str("NPC id"), "reason": str("Why")}, "npc_id")),
 		tool("npc_note", "Remember something about an NPC (their opinion of the party, a secret, a promise).", schema(map[string]any{"npc_id": str("NPC id"), "note": str("The fact")}, "npc_id", "note")),
-		tool("create_quest", "Create a quest with a map marker. If curses are given, a battle starts when the party reaches the location.", schema(map[string]any{
-			"title": str("Quest title"), "description": str("What's going on"), "objective": str("One-line objective"),
+		tool("create_quest", "Create a quest with a map marker. Simple: one location (+ optional curses that fight when the party arrives). Better for anything improvised (a job, a favor, a mystery, a scheme): give an ordered list of steps, and the engine tracks progress and moves the marker by itself. Quests are personal when for_character_id is set (e.g. the player who asked for the job). Add a skill or title reward to make odd jobs feel earned.", schema(map[string]any{
+			"title": str("Quest title"), "description": str("What's going on"), "objective": str("One-line objective (ignored when steps are given)"),
 			"giver_npc_id": str("NPC to report back to (optional)"), "location": where, "curses": curseList,
-			"reward_xp": intg("XP"), "reward_yen": intg("Yen"), "reward_item": str("Catalog item id (optional)"), "min_level": intg("Recommended level"),
-		}, "title", "description", "objective", "location")),
+			"steps": questSteps, "report_to_giver": boolp("Finish by reporting back to the giver after the last step"),
+			"for_character_id": str("Make the quest personal to one character"),
+			"reward_xp":        intg("XP"), "reward_yen": intg("Yen"), "reward_item": str("Catalog item id (optional)"), "min_level": intg("Recommended level"),
+			"reward_title": str("A title to give the character, e.g. 'Shoko's Assistant'"),
+			"reward_skill": skillSpecSchema,
+		}, "title", "description")),
+		tool("add_quest_step", "Append a new step to an existing quest (the plot thickened).", schema(map[string]any{"quest_id": str("Quest id"), "step": questStepSchema}, "quest_id", "step")),
+		tool("complete_quest_step", "Mark a quest's current step done by hand — for 'custom' steps or when the story resolved it another way. If it was the last step the quest finishes (or goes to report-back).", schema(map[string]any{
+			"quest_id": str("Quest id"), "character_id": str("Who did it (optional)"),
+		}, "quest_id")),
+		tool("update_quest", "Rewrite a quest as the story changes: title, description, rewards, or the report-back NPC.", schema(map[string]any{
+			"quest_id": str("Quest id"), "title": str("New title"), "description": str("New description"), "reward_xp": intg("XP"), "reward_yen": intg("Yen"),
+			"reward_title": str("Title reward"), "reward_skill": skillSpecSchema, "giver_npc_id": str("Report-back NPC"),
+		}, "quest_id")),
+		tool("abandon_quest", "Drop a quest that no longer makes sense.", schema(map[string]any{"quest_id": str("Quest id"), "reason": str("Why")}, "quest_id")),
+		tool("create_skill", "Fabricate a perk for a character: an odd-job passive ('Bedside Manner: healing +2') or a funny battle technique ('Whistle Blast'). Use it to reward creative roleplay, apprenticeships and jobs. The engine picks balanced numbers: passives are small; actives scale with level. Max 8 per character.", schema(map[string]any{
+			"character_id": charID, "skill": skillSpecSchema,
+		}, "character_id", "skill")),
+		tool("create_curse", "Invent a brand-new curse that fits the story (a hospital-ward mold, a cafeteria glutton, the thing in the well). It gets balanced stats for its grade, moves chosen by its theme, and a sprite. Returns its id: then use it in start_battle, spawn_curse or quest steps.", schema(map[string]any{
+			"name": str("Curse name"), "description": str("What it is, what fear it grew from"),
+			"theme": enum("Move set / look", "fear", "sick", "hunger", "rage", "decay", "noise", "shadow", "fire", "water"),
+			"grade": intg("0 = Grade 4 ... 4 = Semi-Special (match the party's level)"), "boss": boolp("Boss-type (more HP, rank 2+)"),
+		}, "name", "grade")),
 		tool("complete_quest", "Mark a quest as done (or failed) and pay its rewards.", schema(map[string]any{
 			"quest_id": str("Quest id"), "outcome": enum("Result", "done", "failed"),
 		}, "quest_id", "outcome")),
@@ -408,6 +459,13 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 		if len(ch.Notes) > 0 {
 			fmt.Fprintf(&b, " Notes: %s", strings.Join(ch.Notes, "; "))
 		}
+		if len(ch.Custom) > 0 {
+			var cs []string
+			for _, k := range ch.Custom {
+				cs = append(cs, k.Name)
+			}
+			fmt.Fprintf(&b, " Fabricated skills: %s.", strings.Join(cs, ", "))
+		}
 		b.WriteString("\n")
 	}
 	b.WriteString("</party>\n\n")
@@ -450,6 +508,14 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 			}
 		}
 	}
+	if !d.compact {
+		b.WriteString("All NPCs (use these ids as quest step targets): ")
+		var roster []string
+		for _, n := range e.allNPCs() {
+			roster = append(roster, fmt.Sprintf("%s [%s, %s, %s]", n.Name, n.ID, n.Role, n.Town))
+		}
+		b.WriteString(strings.Join(roster, "; ") + "\n")
+	}
 	b.WriteString("Towns: ")
 	var towns []string
 	for _, t := range e.W.Towns {
@@ -473,7 +539,7 @@ func (d *ClaudeDM) buildTurn(e *Engine, ev DMEvent) string {
 	var qs []string
 	for _, q := range c.Quests {
 		if q.Stage == "active" || q.Stage == "return" {
-			qs = append(qs, fmt.Sprintf("- [%s] %s (%s, %s): %s", q.ID, q.Title, q.Kind, q.Stage, q.Objective))
+			qs = append(qs, fmt.Sprintf("- [%s] %s (%s, %s): %s%s", q.ID, q.Title, q.Kind, q.Stage, q.Objective, q.stepsHint()))
 		}
 	}
 	if len(qs) > 0 {
@@ -578,6 +644,81 @@ func (e *Engine) resolvePlace(where string) (float64, float64, string, bool) {
 		}
 	}
 	return 0, 0, "", false
+}
+
+func boolOf(in map[string]any, k string) bool { v, _ := in[k].(bool); return v }
+
+func moveNames(t CurseTemplate) string {
+	var ns []string
+	for _, m := range t.Moves {
+		ns = append(ns, m.Name)
+	}
+	return strings.Join(ns, ", ")
+}
+
+type stepIn struct {
+	Text       string  `json:"text"`
+	Type       string  `json:"type"`
+	Target     string  `json:"target"`
+	Item       string  `json:"item"`
+	Count      int     `json:"count"`
+	Hours      int     `json:"hours"`
+	Curses     []Spawn `json:"curses"`
+	GiveOnDone string  `json:"give_on_done"`
+	Say        string  `json:"say"`
+}
+
+func (si stepIn) step() QuestStep {
+	return QuestStep{Text: strings.TrimSpace(si.Text), Type: si.Type, Target: strings.TrimSpace(si.Target), Item: strings.TrimSpace(si.Item), Count: si.Count,
+		Hours: si.Hours, Spawns: si.Curses, GiveOnDone: strings.TrimSpace(si.GiveOnDone), Say: strings.TrimSpace(si.Say)}
+}
+
+func decodeOneStep(raw json.RawMessage) (QuestStep, error) {
+	var si stepIn
+	if err := json.Unmarshal(raw, &si); err != nil {
+		return QuestStep{}, fmt.Errorf("bad step")
+	}
+	return si.step(), nil
+}
+
+func decodeSteps(raw, key string) ([]QuestStep, error) {
+	var req map[string]json.RawMessage
+	_ = json.Unmarshal([]byte(raw), &req)
+	if req[key] == nil {
+		return nil, nil
+	}
+	var in []stepIn
+	if err := json.Unmarshal(req[key], &in); err != nil {
+		return nil, fmt.Errorf("bad steps list")
+	}
+	if len(in) > 12 {
+		return nil, fmt.Errorf("at most 12 steps")
+	}
+	var out []QuestStep
+	for _, si := range in {
+		out = append(out, si.step())
+	}
+	return out, nil
+}
+
+func decodeSkill(raw, key string) (*SkillSpec, error) {
+	var req map[string]json.RawMessage
+	_ = json.Unmarshal([]byte(raw), &req)
+	if req[key] == nil {
+		return nil, nil
+	}
+	var in struct {
+		Name, Description, Kind, Mod, Skill, Effect, Status, VFX, Color string
+		Amount, Power                                                   int
+	}
+	if err := json.Unmarshal(req[key], &in); err != nil {
+		return nil, fmt.Errorf("bad skill spec")
+	}
+	sp := SkillSpec{Name: in.Name, Desc: in.Description, Kind: in.Kind, Mod: in.Mod, Skill: in.Skill, Amount: in.Amount, Effect: in.Effect, Status: in.Status, Power: in.Power, VFX: in.VFX, Color: in.Color}
+	if _, err := BuildSkill(10, "check", sp); err != nil { // validate the shape now, not at reward time
+		return nil, err
+	}
+	return &sp, nil
 }
 
 func (d *ClaudeDM) runTool(e *Engine, name, raw, actor string) (out string, isErr bool) {
@@ -744,6 +885,7 @@ func (d *ClaudeDM) runTool(e *Engine, name, raw, actor string) (out string, isEr
 		e.Log("system", ch.Name, fmt.Sprintf("💚 %s recovers %d HP%s.", ch.Name, got, reason()))
 		return fmt.Sprintf("%s healed %d, now %d/%d.", ch.Name, got, ch.HP, ch.MaxHP), false
 	case "give_item":
+		defer e.questEvent("items", actorChar(), "")
 		ch, err := char(s("character_id"))
 		if err != nil {
 			return fail(err)
@@ -941,23 +1083,163 @@ func (d *ClaudeDM) runTool(e *Engine, name, raw, actor string) (out string, isEr
 		}
 		return "Noted.", false
 	case "create_quest":
-		x, y, place, ok := e.resolvePlace(s("location"))
-		if !ok {
-			return "Unknown location " + s("location") + "; use a town, site, NPC or character id.", true
-		}
-		sp, err := parseSpawns("curses")
+		stepsIn, err := decodeSteps(raw, "steps")
 		if err != nil {
 			return fail(err)
 		}
 		q := &Quest{Kind: "ai", Title: s("title"), Desc: s("description"), Objective: s("objective"), Giver: s("giver_npc_id"),
-			X: int(x), Y: int(y), Stage: "active", Encounter: sp, RewardXP: max(0, n("reward_xp")), RewardYen: max(0, n("reward_yen")),
-			RewardItem: s("reward_item"), MinLevel: max(1, n("min_level"))}
-		if site := e.W.Site(s("location")); site != nil {
-			q.Site = site.ID
+			Stage: "active", RewardXP: max(0, n("reward_xp")), RewardYen: max(0, n("reward_yen")),
+			RewardItem: s("reward_item"), MinLevel: max(1, n("min_level")), Report: boolOf(in, "report_to_giver"), RewardTitle: s("reward_title")}
+		if id := s("for_character_id"); id != "" {
+			if c, err := char(id); err == nil {
+				q.For = c.ID
+			}
+		}
+		if sk, err := decodeSkill(raw, "reward_skill"); err != nil {
+			return fail(err)
+		} else if sk != nil {
+			q.RewardSkill = sk
+		}
+		place := ""
+		if len(stepsIn) > 0 {
+			for _, st := range stepsIn {
+				if err := e.prepareStep(&st); err != nil {
+					return fail(err)
+				}
+				q.Steps = append(q.Steps, st)
+			}
+			if q.Objective == "" {
+				q.Objective = q.Steps[0].Text
+			}
+		} else {
+			if s("location") == "" {
+				return "Give a location, or a list of steps.", true
+			}
+			x, y, pl, ok := e.resolvePlace(s("location"))
+			if !ok {
+				return "Unknown location " + s("location") + "; use a town, site, NPC or character id.", true
+			}
+			sp, err := parseSpawns("curses")
+			if err != nil {
+				return fail(err)
+			}
+			q.X, q.Y, q.Encounter, place = int(x), int(y), sp, pl
+			if site := e.W.Site(s("location")); site != nil {
+				q.Site = site.ID
+			}
+			if q.Objective == "" {
+				return "Give a one-line objective.", true
+			}
 		}
 		e.addQuest(q)
+		e.syncQuest(q)
 		e.Log("system", "", fmt.Sprintf("📜 New quest: %s — %s", q.Title, q.Objective))
-		return fmt.Sprintf("Quest %s created at %s.", q.ID, place), false
+		e.questEvent("items", actorChar(), "")
+		return fmt.Sprintf("Quest %s created (%d steps)%s. The engine will advance it as the players act; use complete_quest_step for 'custom' steps.", q.ID, len(q.Steps), place), false
+	case "add_quest_step":
+		q := e.quest(s("quest_id"))
+		if q == nil {
+			return "No such quest.", true
+		}
+		var req struct{ Step json.RawMessage }
+		_ = json.Unmarshal([]byte(raw), &req)
+		st, err := decodeOneStep(req.Step)
+		if err != nil {
+			return fail(err)
+		}
+		if err := e.prepareStep(&st); err != nil {
+			return fail(err)
+		}
+		q.Steps = append(q.Steps, st)
+		if q.Stage == "return" || q.Stage == "done" {
+			q.Stage = "active"
+		}
+		e.syncQuest(q)
+		e.Log("system", "", "➕ "+q.Title+" — new step: "+st.Text)
+		return fmt.Sprintf("Step added (%d total).", len(q.Steps)), false
+	case "complete_quest_step":
+		q := e.quest(s("quest_id"))
+		if q == nil || len(q.Steps) == 0 {
+			return "No such stepped quest.", true
+		}
+		i, st := q.cur()
+		if st == nil {
+			return "Every step is already done.", true
+		}
+		var who *Character
+		if id := s("character_id"); id != "" {
+			who, _ = char(id)
+		}
+		if who == nil {
+			who = actorChar()
+		}
+		e.completeStep(q, i, who)
+		return fmt.Sprintf("Step done. Quest stage: %s.", q.Stage), false
+	case "update_quest":
+		q := e.quest(s("quest_id"))
+		if q == nil {
+			return "No such quest.", true
+		}
+		if v := s("title"); v != "" {
+			q.Title = v
+		}
+		if v := s("description"); v != "" {
+			q.Desc = v
+		}
+		if _, ok := in["reward_xp"]; ok {
+			q.RewardXP = max(0, n("reward_xp"))
+		}
+		if _, ok := in["reward_yen"]; ok {
+			q.RewardYen = max(0, n("reward_yen"))
+		}
+		if v := s("reward_title"); v != "" {
+			q.RewardTitle = v
+		}
+		if v := s("giver_npc_id"); v != "" {
+			q.Giver = v
+			if g := e.npcByID(v); g != nil {
+				q.GiverName = g.Name
+			}
+		}
+		if sk, err := decodeSkill(raw, "reward_skill"); err != nil {
+			return fail(err)
+		} else if sk != nil {
+			q.RewardSkill = sk
+		}
+		return "Quest updated.", false
+	case "abandon_quest":
+		q := e.quest(s("quest_id"))
+		if q == nil {
+			return "No such quest.", true
+		}
+		q.Stage = "failed"
+		e.Log("system", "", "🚫 Quest dropped: "+q.Title+reason())
+		return "Quest dropped.", false
+	case "create_skill":
+		c, err := char(s("character_id"))
+		if err != nil {
+			return fail(err)
+		}
+		sp, err := decodeSkill(raw, "skill")
+		if err != nil || sp == nil {
+			if err == nil {
+				err = fmt.Errorf("give a skill spec")
+			}
+			return fail(err)
+		}
+		sp.Source = "fabricated by the DM"
+		cs, err := e.GrantSkill(c, *sp)
+		if err != nil {
+			return fail(err)
+		}
+		return fmt.Sprintf("%s learned %s (%s). %s", c.Name, cs.Name, cs.Kind, cs.Desc), false
+	case "create_curse":
+		t, err := e.NewCustomCurse(s("name"), s("description"), s("theme"), n("grade"), boolOf(in, "boss"))
+		if err != nil {
+			return fail(err)
+		}
+		e.Log("system", "", fmt.Sprintf("👹 A new curse enters the world: %s (%s).", t.Name, t.Grade))
+		return fmt.Sprintf("Curse created with id %q (%s, HP %s, AC %d, moves: %s). Use that id in start_battle / spawn_curse / quest steps.", t.ID, t.Grade, t.HP, t.AC, moveNames(t)), false
 	case "complete_quest":
 		q := e.quest(s("quest_id"))
 		if q == nil {
@@ -968,14 +1250,7 @@ func (d *ClaudeDM) runTool(e *Engine, name, raw, actor string) (out string, isEr
 			e.Log("system", "", "❌ Quest failed: "+q.Title)
 			return "Quest failed.", false
 		}
-		q.Stage = "done"
-		party := e.livingChars()
-		e.awardXPTo(party, q.RewardXP, "quest: "+q.Title)
-		e.splitYen(party, q.RewardYen, "reward for "+q.Title)
-		if it, ok := NewItem(q.RewardItem); ok && len(party) > 0 {
-			party[0].AddItem(it)
-		}
-		e.Log("system", "", "✅ Quest complete: "+q.Title)
+		e.payQuest(q, actorChar())
 		return "Quest complete; rewards paid.", false
 	case "offer_choice":
 		opts := strs("options")

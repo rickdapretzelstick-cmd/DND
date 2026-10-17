@@ -47,6 +47,7 @@ type Character struct {
 	Title     string         `json:"title,omitempty"`  // e.g. "Town Guard of Akegawa" (set by the DM)
 	Notes     []string       `json:"notes,omitempty"`  // DM-tracked facts about this hero
 	Vessel    bool           `json:"vessel,omitempty"` // swallowed Sukuna's finger
+	Custom    []CustomSkill  `json:"custom,omitempty"` // perks fabricated in play
 
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
@@ -206,6 +207,29 @@ type Quest struct {
 	Act        int     `json:"act,omitempty"`
 	MinLevel   int     `json:"minLevel"`
 	Objective  string  `json:"objective"`
+	// Dynamic quests: an ordered chain of steps the engine tracks on its own.
+	Steps       []QuestStep `json:"steps,omitempty"`
+	For         string      `json:"for,omitempty"` // character the quest is about ("" = the whole party)
+	RewardSkill *SkillSpec  `json:"rewardSkill,omitempty"`
+	RewardTitle string      `json:"rewardTitle,omitempty"`
+	Report      bool        `json:"report,omitempty"` // finish by reporting back to the giver
+}
+
+// QuestStep is one beat of a quest. Types: goto, talk, deliver, collect, defeat, wait, custom (DM decides).
+type QuestStep struct {
+	Text       string  `json:"text"`
+	Type       string  `json:"type"`
+	Target     string  `json:"target,omitempty"` // npc id (talk/deliver) or place id (goto/defeat)
+	Item       string  `json:"item,omitempty"`   // item id or name (collect/deliver)
+	Count      int     `json:"count,omitempty"`
+	X          int     `json:"x,omitempty"`
+	Y          int     `json:"y,omitempty"`
+	Spawns     []Spawn `json:"spawns,omitempty"`
+	Hours      int     `json:"hours,omitempty"`
+	Until      float64 `json:"until,omitempty"`      // absolute game hour a wait step ends
+	GiveOnDone string  `json:"giveOnDone,omitempty"` // quest item handed over when this step is completed
+	Say        string  `json:"say,omitempty"`        // line the target NPC speaks when a talk/deliver step completes
+	Done       bool    `json:"done,omitempty"`
 }
 
 // Choice is a decision put to the whole party.
@@ -236,33 +260,34 @@ type NPCState struct {
 }
 
 type Campaign struct {
-	ID         string                `json:"id"`
-	Name       string                `json:"name"`
-	Setting    string                `json:"setting"`
-	Mode       string                `json:"mode"` // "ai" or "offline"
-	Created    time.Time             `json:"created"`
-	Started    bool                  `json:"started"`
-	Seed       int64                 `json:"seed"`
-	Players    map[string]*Player    `json:"players"`
-	Characters map[string]*Character `json:"characters"`
-	Log        []LogEntry            `json:"log"`
-	NextLogID  int                   `json:"nextLogId"`
-	NextID     int                   `json:"nextId"`
-	Combat     *Combat               `json:"combat"`
-	LastBattle *BattleResult         `json:"lastBattle"`
-	Location   string                `json:"location"`
-	SceneDesc  string                `json:"sceneDesc"`
-	Quest      string                `json:"quest"`
-	Journal    []string              `json:"journal"`
-	Quests     []*Quest              `json:"quests"`
-	Flags      map[string]string     `json:"flags"`
-	Rep        map[string]int        `json:"rep"`
-	Act        int                   `json:"act"`
-	Choice     *Choice               `json:"choice"`
-	Cleared    map[string]bool       `json:"cleared"`
-	Discovered map[string]bool       `json:"discovered"`
-	NPCs       map[string]*NPCState  `json:"npcs"`
-	ExtraNPCs  []*NPC                `json:"extraNpcs"`
-	Day        int                   `json:"day"`
-	Clock      float64               `json:"clock"` // 0..24 hours
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Setting      string                   `json:"setting"`
+	Mode         string                   `json:"mode"` // "ai" or "offline"
+	Created      time.Time                `json:"created"`
+	Started      bool                     `json:"started"`
+	Seed         int64                    `json:"seed"`
+	Players      map[string]*Player       `json:"players"`
+	Characters   map[string]*Character    `json:"characters"`
+	Log          []LogEntry               `json:"log"`
+	NextLogID    int                      `json:"nextLogId"`
+	NextID       int                      `json:"nextId"`
+	Combat       *Combat                  `json:"combat"`
+	LastBattle   *BattleResult            `json:"lastBattle"`
+	Location     string                   `json:"location"`
+	SceneDesc    string                   `json:"sceneDesc"`
+	Quest        string                   `json:"quest"`
+	Journal      []string                 `json:"journal"`
+	Quests       []*Quest                 `json:"quests"`
+	Flags        map[string]string        `json:"flags"`
+	Rep          map[string]int           `json:"rep"`
+	Act          int                      `json:"act"`
+	Choice       *Choice                  `json:"choice"`
+	Cleared      map[string]bool          `json:"cleared"`
+	Discovered   map[string]bool          `json:"discovered"`
+	NPCs         map[string]*NPCState     `json:"npcs"`
+	ExtraNPCs    []*NPC                   `json:"extraNpcs"`
+	Day          int                      `json:"day"`
+	Clock        float64                  `json:"clock"` // 0..24 hours
+	CustomCurses map[string]CurseTemplate `json:"customCurses,omitempty"`
 }

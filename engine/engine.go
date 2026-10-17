@@ -188,6 +188,7 @@ func (e *Engine) setCampaign(c *Campaign) {
 		c.Clock, c.Day = 9, 1
 	}
 	e.C = c
+	e.registerCustomCurses()
 	e.W = GenerateWorld(c.Seed)
 	e.Roamers = nil
 	e.queue = nil
@@ -586,6 +587,11 @@ func (e *Engine) npcMarkers() map[string]string {
 		if q.Stage == "return" && q.Giver != "" {
 			m[q.Giver] = "?"
 		}
+		if q.Stage == "active" {
+			if _, st := q.cur(); st != nil && (st.Type == "talk" || st.Type == "deliver") && m[st.Target] == "" {
+				m[st.Target] = "!"
+			}
+		}
 	}
 	return m
 }
@@ -854,6 +860,7 @@ func (e *Engine) Talk(token, npcID, text string) error {
 		text = text[:800]
 	}
 	e.Log("action", ch.Name, "to "+n.Name+": "+text)
+	e.questEvent("talk", ch, n.ID)
 	e.enqueue(DMEvent{Kind: "talk", Summary: n.ID, Actions: []PendingAction{{PlayerID: p.ID, CharID: ch.ID, CharName: ch.Name, Text: text}}})
 	return nil
 }

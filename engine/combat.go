@@ -324,7 +324,7 @@ func (e *Engine) StartBattle(o BattleOpts) (string, error) {
 	for _, ch := range party {
 		ch.Status, ch.Used, ch.Fled, ch.InBattle = map[string]int{}, map[string]int{}, false, true
 		r, _ := D20(0)
-		init := r + ch.Mod("DEX")
+		init := r + ch.Mod("DEX") + ch.Passive("init")
 		if o.Surprise != "enemies" {
 			init += 8 // the party gets the first move unless ambushed
 		}
@@ -836,8 +836,14 @@ func (e *Engine) combatAction(ch *Character, r CombatReq) error {
 			return err
 		}
 	case "ability":
-		ab, ok := AbilityList[r.Ability]
-		if !ok || !ch.Knows(r.Ability) || ab.Passive {
+		var ab Ability
+		ok := false
+		for _, k := range ch.KnownAbilities() {
+			if k.ID == r.Ability {
+				ab, ok = k, true
+			}
+		}
+		if !ok || ab.Passive {
 			return fmt.Errorf("you can't use that")
 		}
 		if ab.Bonus {
@@ -1018,6 +1024,9 @@ func (e *Engine) diceFor(src fighter, eff Effect) (expr string, mod int, weapon 
 	} else if eff.AddMod && src.c != nil {
 		mod = src.c.CastMod()
 	}
+	if src.c != nil && (eff.Kind == "attack" || eff.Kind == "save" || eff.Kind == "auto") {
+		mod += src.c.Passive("damage")
+	}
 	if eff.Scale != "" && src.c != nil {
 		for i := 0; i < tiers(src.c.Level); i++ {
 			expr += "+" + eff.Scale
@@ -1190,6 +1199,9 @@ func (e *Engine) resolveEffect(src, tgt fighter, eff Effect, ab Ability, domainP
 		amt := MustRoll(expr).Total + mod
 		if ab.ID == "rct" && src.c != nil {
 			amt += src.c.Level
+		}
+		if src.c != nil {
+			amt += src.c.Passive("heal")
 		}
 		got := tgt.heal(amt)
 		return []FXHit{{ID: tgt.id(), Heal: got}}, fmt.Sprintf("%s heals %d", tgt.name(), got), false

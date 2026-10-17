@@ -55,6 +55,7 @@ func (e *Engine) onArrive(ch *Character) {
 	if e.C.Combat != nil {
 		return
 	}
+	e.questEvent("arrive", ch, "")
 	for _, q := range e.C.Quests {
 		if q.Stage != "active" || len(q.Encounter) == 0 {
 			continue
@@ -164,6 +165,7 @@ func (e *Engine) tick(dt float64) {
 	}
 	if int(e.C.Clock) != prevHour {
 		e.posDirty = true
+		e.questEvent("hour", nil, "")
 		if int(e.C.Clock) == 20 {
 			e.Log("system", "", "🌙 Night falls. Curses grow bolder in the dark.")
 		} else if int(e.C.Clock) == 6 {
