@@ -1,4 +1,5 @@
 // Overworld rendering.
+import { renderChunk } from "./terrain.js";
 import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, drawTile, drawBuilding, charSprite, curseSprite, hash } from "./pixel.js";
 
 const CHUNK = 32;
@@ -36,15 +37,15 @@ export class WorldView {
       this.chunks.set(k, c);
       return c;
     }
-    const [cv, ctx] = makeCanvas(CHUNK * TILE, CHUNK * TILE);
-    const at = (x, y) => this.at(x, y);
-    for (let y = 0; y < CHUNK; y++) for (let x = 0; x < CHUNK; x++) {
-      const tx = cx * CHUNK + x, ty = cy * CHUNK + y;
-      drawTile(ctx, this.at(tx, ty), x * TILE, y * TILE, tx, ty, at);
-    }
+    const t0 = performance.now();
+    const r = renderChunk((x, y) => this.at(x, y), cx, cy);
+    const cv = r.ground;
+    cv.foam = r.foam;
+    const bctx = cv.getContext("2d");
     for (const b of this.buildingsByChunk.get(k) || []) {
-      drawBuilding(ctx, b, (b.x - cx * CHUNK) * TILE, (b.y - cy * CHUNK) * TILE);
+      drawBuilding(bctx, b, (b.x - cx * CHUNK) * TILE, (b.y - cy * CHUNK) * TILE);
     }
+    cv.ms = performance.now() - t0;
     this.chunks.set(k, cv);
     if (this.chunks.size > 30) this.chunks.delete(this.chunks.keys().next().value);
     return cv;
@@ -78,7 +79,13 @@ export class WorldView {
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       if (cx < 0 || cy < 0 || cx * CHUNK >= this.w.w || cy * CHUNK >= this.w.h) continue;
       const c = this.chunk(cx, cy);
-      ctx.drawImage(c, Math.floor(ox + cx * CHUNK * tpx), Math.floor(oy + cy * CHUNK * tpx), CHUNK * tpx, CHUNK * tpx);
+      const dx = Math.floor(ox + cx * CHUNK * tpx), dy = Math.floor(oy + cy * CHUNK * tpx);
+      ctx.drawImage(c, dx, dy, CHUNK * tpx, CHUNK * tpx);
+      if (c.foam) {
+        ctx.globalAlpha = 0.45 + 0.35 * Math.sin(now / 700 + cx * 1.3 + cy);
+        ctx.drawImage(c.foam, dx, dy, CHUNK * tpx, CHUNK * tpx);
+        ctx.globalAlpha = 1;
+      }
     }
     // Water shimmer
     const tx0 = Math.max(0, Math.floor(left)), ty0 = Math.max(0, Math.floor(top));

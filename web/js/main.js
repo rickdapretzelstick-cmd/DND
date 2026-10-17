@@ -733,7 +733,7 @@ function frame(now) {
     r.x += dx * k; r.y += (r.ty - r.y) * k;
     if (Math.abs(dx) > 0.01) r.face = dx < 0 ? -1 : 1;
   }
-  zoom = Math.max(2, Math.min(4, Math.round(H / (16 * 15))));
+  zoom = Math.max(2, Math.min(4, Math.round(H / (16 * 18))));
   const me2 = ents.get(mine.id);
   const cam = { x: me2.x, y: me2.y - 0.5 };
   // Build entity list
