@@ -1,6 +1,7 @@
 // Turn-based battle scene: backgrounds, actors, and technique VFX.
 import { charSprite, hash, shade } from "./pixel.js";
 import { curseSprite, curseSize } from "./curses.js";
+import { sfx } from "./audio.js";
 
 const VFX = {
   beam: ["blood_beam", "love_beam", "beam", "amber", "sonic", "spear"],
@@ -160,6 +161,7 @@ export class BattleView {
       return;
     }
     if (f.kind === "domain") {
+      sfx("domain");
       this.banner = { text: "DOMAIN EXPANSION", sub: (f.name || "").replace(/^Domain Expansion:\s*/, ""), color: f.color || "#fff", t0: now, dur: 2200 };
       this.flash = { color: "#ffffff", t0: now, dur: 600 };
       this.shake = 10;
@@ -173,6 +175,7 @@ export class BattleView {
       return;
     }
     const kind = VFX_KIND[f.vfx] || "orb";
+    if (kind === "beam" || kind === "bolt") sfx("beam"); else if (kind === "aura" || kind === "shield") sfx("buff"); else if (kind === "orb" || kind === "pull" || kind === "ring" || kind === "summon" || kind === "ground" || kind === "rain") sfx("cast");
     const color = f.color || "#fff";
     if (src && (kind === "melee" || kind === "slash") && f.hits?.some((h) => L[h.id] && !L[h.id].party !== !src.party)) {
       this.anim[f.src] = { ...(this.anim[f.src] || {}), lunge: now };
@@ -196,6 +199,7 @@ export class BattleView {
       }, impactDelay - 40);
     }
     if (f.vfx === "blackflash" && f.kind === "move" && /overdrive/i.test(f.name || "")) {
+      sfx("overdrive");
       this.banner = { text: "CURSED OVERDRIVE", sub: "", color: "#ffd166", t0: now, dur: 1400, bf: true };
       this.flash = { color: "#ff2e63", t0: now, dur: 500 };
       this.shake = 20;
@@ -269,11 +273,13 @@ export class BattleView {
     const ty = t.y - (t.party ? 18 : 14) * t.scale;
     const a = (this.anim[h.id] = { ...(this.anim[h.id] || {}) });
     if (h.miss) {
+      sfx("miss");
       this.texts.push(txt(t.x, ty - 20, h.status === "nullified" ? "NULLIFIED" : h.saved ? "RESISTED" : "MISS", "#ced4da", 18, now));
       a.dodge = now;
       return;
     }
     if (h.dmg) {
+      sfx(bf ? "blackflash" : h.crit ? "crit" : "hit");
       a.hit = now;
       this.punch = { t0: now, x: t.x, y: ty, k: bf ? 0.16 : h.crit ? 0.1 : 0.05 };
       this.beams.push({ type: "burst", x: t.x, y: ty, color: bf ? "#ff1f3d" : "#ffffff", t0: now, dur: 260, r: bf ? 220 : 90 + h.dmg });
@@ -283,6 +289,7 @@ export class BattleView {
       for (let i = 0; i < (bf ? 50 : 14); i++) this.particles.push(part(t.x, ty, (Math.random() - 0.5) * 500, (Math.random() - 0.7) * 500, bf ? (i % 2 ? "#000" : "#ff1f3d") : color, 500, bf ? 5 : 3));
       if (bf) for (let i = 0; i < 5; i++) this.beams.push({ type: "bolt", x1: t.x, y1: ty, x2: t.x + (Math.random() - 0.5) * 300, y2: ty + (Math.random() - 0.5) * 240, color: i % 2 ? "#000000" : "#ff1f3d", t0: now, dur: 500 });
     }
+    if (h.heal) sfx("heal");
     if (h.heal) this.texts.push(txt(t.x, ty - 34, "+" + h.heal, "#80ed99", 26, now));
     const words = { stun: "STUNNED", stunned: "STUNNED", exposed: "EXPOSED", weakened: "WEAKENED", marked: "MARKED", burn: "BURNING", bleed: "BLEEDING", poison: "POISONED", infinity: "INFINITY", guard: "GUARD", empowered: "EMPOWERED", haste: "HASTE", zone: "IN THE ZONE", regen: "REGEN", simple_domain: "SIMPLE DOMAIN", jackpot: "JACKPOT!", riichi: "RIICHI...", dispelled: "NULLIFIED" };
     if (h.status && words[h.status]) this.texts.push(txt(t.x, ty - 62, words[h.status], h.status === "jackpot" ? "#06d6a0" : "#c77dff", 16, now + 120));

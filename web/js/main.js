@@ -1,5 +1,6 @@
 import { curseSprite } from "./curses.js";
 import { findPath } from "./path.js";
+import { sfx, setMusic, musicTick, toggleMute, isMuted } from "./audio.js";
 import { TILE, charSprite, makeCanvas, SKIN, HAIR_STYLES, OUTFITS, ACCESSORIES, BUILDS } from "./pixel.js";
 import { WorldView, drawCharacter, drawCurseEntity, nameplate, marker, bubble, drawLighting } from "./world.js";
 import { BattleView } from "./battle.js";
@@ -28,6 +29,11 @@ const bubbles = new Map(); // name -> {text, t0, dur, kind}
 let dialog = null;
 let watchBattle = false;
 let battleTarget = "";
+let autoStarted = false;
+let stepClock = 0;
+let zoomPref = +localStorage.getItem("jjk_zoom") || 0;
+let lastTurnKey = "";
+let wasInCombat = false;
 let trackedId = localStorage.getItem("jjk_tracked") || "";
 let waypoint = null;           // {x, y} set by clicking the map
 let showRoute = localStorage.getItem("jjk_route") !== "0";
@@ -144,6 +150,7 @@ async function onState(snap) {
   const prevCombat = S?.combat;
   S = snap;
   window.__S = S;
+  window.__route = () => routeCache.pts;
   window.__roamers = () => [...roamers.values()].map((r) => ({ id: r.id, k: r.k, x: r.x, y: r.y, c: r.c, e: r.e }));
   window.__pos = () => { const c = myChar(), e = c && ents.get(c.id); return e ? [e.x, e.y] : null; };
   if (!myPlayer()) { api("/api/join", { name: me.name || "Sorcerer", token }).catch(() => {}); return; }
@@ -154,6 +161,11 @@ async function onState(snap) {
     world = new WorldView(w);
     ents.clear();
     lastLogId = 0;
+  }
+  const ch0 = myChar();
+  if (ch0 && !S.started && me.isHost && !autoStarted && S.players.filter((p) => p.online).length <= 1) {
+    autoStarted = true;      // a solo host shouldn't have to hunt for a Begin button
+    setTimeout(() => api("/api/host/start", {}).catch(() => { autoStarted = false; }), 900);
   }
   const ch = myChar();
   if (!ch) {
@@ -204,6 +216,13 @@ function ingestLog() {
   if (fresh.length) lastLogId = fresh[fresh.length - 1].id;
   if (firstLoad) { renderLog(); return; }
   for (const l of fresh) {
+    const tx = l.text || "";
+    if (/New quest:/.test(tx)) sfx("quest");
+    else if (/Quest complete/.test(tx)) sfx("questdone");
+    else if (/reaches level|learned a new/.test(tx)) sfx("levelup");
+    else if (/receives|🎒|🎁/.test(tx)) sfx("item");
+    else if (/buys|¥[\d,]+ each|yen/i.test(tx) && l.kind === "system") sfx("coin");
+    else if (/✔ /.test(tx)) sfx("select");
     if (l.kind === "say") {
       bubbles.set(l.who, { text: l.text, t0: performance.now(), dur: 5000 + l.text.length * 45, kind: "say" });
       if (dialog && dialog.name === l.who) { dialog.text = l.text; dialog.waiting = false; renderDialog(); }
@@ -257,11 +276,12 @@ function renderTracker() {
   }).join("") : "";
   if (!active.length && me0) {
     const jobs = npcList().filter((n) => S.markers?.[n.id] === "+" || S.markers?.[n.id] === "!").map((n) => ({ n, d: Math.hypot(n.x - me0.x, n.y - me0.y) })).sort((a, b) => a.d - b.d)[0];
-    tHtml = S.started ? `<div class="muted">No active quests.${jobs ? `<br><b style="color:#ffd166">${S.markers[jobs.n.id] === "!" ? "❗" : "➕"} ${esc(jobs.n.name)}</b> needs someone — ${Math.round(jobs.d)} m ${dir8(jobs.n.x - me0.x, jobs.n.y - me0.y)}.` : ""}<br>Ask anyone “any odd jobs?”, or open the Map (M) to see who's hiring.</div>` : `<div class="muted">Waiting for the host to begin the story…</div>`;
+    tHtml = S.started ? `<div class="muted">No active quests.${jobs ? `<br><b style="color:#ffd166">${S.markers[jobs.n.id] === "!" ? "❗" : "➕"} ${esc(jobs.n.name)}</b> needs someone — ${Math.round(jobs.d)} m ${dir8(jobs.n.x - me0.x, jobs.n.y - me0.y)}.` : ""}<br>Ask anyone “any odd jobs?”, or open the Map (M) to see who's hiring.</div>` : `<div class="muted">Waiting for the host to begin the story…${me.isHost ? '<br><button class="btn primary" id="trk-begin">🌸 Begin the story</button>' : ""}</div>`;
   }
   tHtml += `<div class="trkbar"><button class="mini" id="trk-route">${showRoute ? "🧭 Route: on" : "🧭 Route: off"} (G)</button>${waypoint ? '<button class="mini" id="trk-wp">✖ Clear waypoint</button>' : ""}</div>`;
   $("#tracker").innerHTML = tHtml;
   $$("#tracker [data-q]").forEach((el) => (el.onclick = () => { trackedId = el.dataset.q; waypoint = null; localStorage.setItem("jjk_tracked", trackedId); routeCache.key = ""; renderHUD(); }));
+  const tb = $("#trk-begin"); if (tb) tb.onclick = () => act("/api/host/start", {});
   const tr = $("#trk-route"); if (tr) tr.onclick = toggleRoute;
   const tw = $("#trk-wp"); if (tw) tw.onclick = () => { waypoint = null; routeCache.key = ""; renderHUD(); };
 }
@@ -407,6 +427,8 @@ function renderBattleUI() {
     if (sk) sk.onclick = () => act("/api/host/skip", {});
     return;
   }
+  const tk = cb.round + ":" + cb.turn;
+  if (tk !== lastTurnKey) { lastTurnKey = tk; sfx("turn"); }
   const abil = knownAbilities(mine);
   const alive = cb.monsters.filter((m) => m.hp > 0);
   if (!alive.find((m) => m.id === battleTarget) && !S.characters.find((c) => c.id === battleTarget)) battleTarget = alive[0]?.id || "";
@@ -805,6 +827,7 @@ addEventListener("keydown", (e) => {
   if (k === "q") togglePanel("quests");
   if (k === "m") togglePanel("map");
   if (k === "g") toggleRoute();
+  if (k === "n") { toggleMute(); paintMute(); toast(isMuted() ? "Sound off" : "Sound on"); }
   if (k === "l") $("#log-head").click();
 });
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
@@ -817,7 +840,20 @@ $$("#dpad button").forEach((b) => {
   b.addEventListener("touchstart", on); b.addEventListener("touchend", off); b.addEventListener("mousedown", on); b.addEventListener("mouseup", off);
 });
 
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("button, .ab, [data-o]");
+  if (b && !b.disabled) sfx(b.classList?.contains("ab") ? "select" : "click");
+}, true);
+
 const cv = $("#cv");
+cv.addEventListener("wheel", (e) => {
+  if (S?.combat) return;
+  e.preventDefault();
+  const cur = zoomPref || zoom;
+  zoomPref = Math.max(2, Math.min(5, cur + (e.deltaY < 0 ? 1 : -1)));
+  localStorage.setItem("jjk_zoom", String(zoomPref));
+  toast("Zoom " + zoomPref + "x (mouse wheel)");
+}, { passive: false });
 const ctx = cv.getContext("2d");
 cv.addEventListener("click", (e) => {
   if (!S?.combat) return;
@@ -854,12 +890,15 @@ function moveMe(dt) {
     const len = Math.hypot(dx, dy);
     const speed = keys.has("shift") ? 6.5 : 4.2;
     const step = (speed * dt) / len;
-    const ok = (x, y) => world.walkable(x - 0.28, y) && world.walkable(x + 0.28, y) && world.walkable(x - 0.28, y - 0.25) && world.walkable(x + 0.28, y - 0.25);
+    const okAt = (f) => (x, y) => f(x - 0.28, y) && f(x + 0.28, y) && f(x - 0.28, y - 0.25) && f(x + 0.28, y - 0.25);
+    const okTile = okAt((x, y) => world.walkableTile(x, y)), okSolid = okAt((x, y) => world.walkable(x, y));
+    const ok = okSolid(e.x, e.y) ? okSolid : okTile;   // if a prop pins you, you may walk out of it
     if (ok(e.x + dx * step, e.y)) e.x += dx * step;
     if (ok(e.x, e.y + dy * step)) e.y += dy * step;
     e.dir = dx && dy ? (dy > 0 ? (dx < 0 ? 4 : 5) : (dx < 0 ? 6 : 7)) : dx ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
   }
   e.moving = moving;
+  if (moving) { stepClock -= dt; if (stepClock <= 0) { sfx("step"); stepClock = keys.has("shift") ? 0.2 : 0.3; } }
   e.tx = e.x; e.ty = e.y;
   const now = performance.now();
   if (now - lastSent.t > 100 && (Math.hypot(e.x - lastSent.x, e.y - lastSent.y) > 0.02 || moving !== lastSent.moving)) {
@@ -882,6 +921,14 @@ function frame(now) {
   if (!S || !world || $("#hud").classList.contains("hidden")) { ctx.fillStyle = "#0b0b12"; ctx.fillRect(0, 0, W, H); return; }
   const mine = myChar();
   if (!mine) return;
+  {
+    const inB = !!(S.combat && (mine.inBattle || watchBattle));
+    if (inB && !wasInCombat) sfx("encounter");
+    if (!inB && wasInCombat && S.lastBattle) sfx(S.lastBattle.outcome === "defeat" ? "defeat" : S.lastBattle.outcome === "victory" ? "victory" : "select");
+    wasInCombat = inB;
+    setMusic(inB ? "battle" : clock >= 19.5 || clock < 5 ? "night" : "calm");
+    musicTick(now);
+  }
   if (S.combat && (mine.inBattle || watchBattle)) {
     $("#story-card").classList.add("hidden");
     battle.draw(ctx, W, H, now, { target: battleTarget, clock });
@@ -901,7 +948,7 @@ function frame(now) {
     r.x += dx * k; r.y += (r.ty - r.y) * k;
     if (Math.abs(dx) > 0.01) r.face = dx < 0 ? -1 : 1;
   }
-  zoom = Math.max(2, Math.min(4, Math.round(H / (16 * 18))));
+  zoom = zoomPref || Math.max(2, Math.min(4, Math.floor(H / 330)));
   const me2 = ents.get(mine.id);
   const cam = window.__cam || { x: me2.x, y: me2.y - 0.5 };
   // Build entity list
@@ -1099,6 +1146,9 @@ async function pollOnline() {
 
 // ---------- host ----------
 $("#btn-host").onclick = openHost;
+function paintMute() { const b = $("#btn-mute"); if (b) b.textContent = isMuted() ? "🔇" : "🔊"; }
+$("#btn-mute").onclick = () => { toggleMute(); paintMute(); };
+paintMute();
 $("#host-close").onclick = () => $("#host-modal").classList.add("hidden");
 async function openHost() {
   $("#host-modal").classList.remove("hidden");

@@ -6,6 +6,8 @@ import { curseSprite } from "./curses.js";
 import { TILE, T, WALKABLE, MINIMAP_COLORS, makeCanvas, charSprite, hash } from "./pixel.js";
 
 const CHUNK = 32;
+// collision footprints (half-width, half-depth, lift) in tiles for props you can't walk through
+const SOLID = { oak: [0.55, 0.35, 0.1], sakura: [0.55, 0.35, 0.1], autumn: [0.55, 0.35, 0.1], pine: [0.45, 0.3, 0.1], boulder: [1.1, 0.6, 0.5], crystal: [0.6, 0.35, 0.3], dead: [0.35, 0.25, 0.1], stall: [1.5, 0.7, 0.4], fountain: [2.3, 1.1, 0.8], planter: [0.8, 0.45, 0.35], lamp: [0.25, 0.2, 0.1], vending: [0.5, 0.3, 0.2], bench: [0.8, 0.3, 0.2], lantern: [0.3, 0.25, 0.1] };
 
 export class WorldView {
   constructor(world) {
@@ -78,7 +80,15 @@ export class WorldView {
     return this.tiles[y * this.w.w + x];
   }
 
-  walkable(x, y) { return WALKABLE.has(this.at(Math.floor(x), Math.floor(y))); }
+  walkableTile(x, y) { return WALKABLE.has(this.at(Math.floor(x), Math.floor(y))); }
+
+  walkable(x, y) {
+    if (!WALKABLE.has(this.at(Math.floor(x), Math.floor(y)))) return false;
+    // solid props (trunks, boulders, stalls...) block you too; only chunks already built are consulted
+    const c = this.chunks.get(Math.floor(x / CHUNK) + "," + Math.floor(y / CHUNK));
+    if (c && c.solids) for (const b of c.solids) if (Math.abs(x - b.x) < b.rx && Math.abs(y - b.y) < b.ry) return false;
+    return true;
+  }
 
   chunk(cx, cy) {
     const k = cx + "," + cy;
@@ -97,6 +107,11 @@ export class WorldView {
       drawBuildingShadow(bctx, b, (b.x - cx * CHUNK) * TILE, (b.y - cy * CHUNK) * TILE);
     }
     cv.props = chunkProps((x, y) => this.at(x, y), cx, cy);
+    cv.solids = [];
+    for (const p of cv.props) {
+      const sd = SOLID[p.kind];
+      if (sd) cv.solids.push({ x: p.x, y: p.y - 0.1, rx: sd[0], ry: sd[1] });
+    }
     cv.ms = performance.now() - t0;
     this.chunks.set(k, cv);
     if (this.chunks.size > 30) this.chunks.delete(this.chunks.keys().next().value);
