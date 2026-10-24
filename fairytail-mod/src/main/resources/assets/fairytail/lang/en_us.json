@@ -1,0 +1,21 @@
+{
+  "itemGroup.fairytail.zodiac_keys": "Fairy Tail: Golden Zodiac Keys",
+  "tooltip.fairytail.key_use": "Right-click to open the gate (Phase 1: no spirit answers)",
+  "item.fairytail.key_aquarius": "Key of Aquarius",
+  "item.fairytail.key_taurus": "Key of Taurus",
+  "item.fairytail.key_cancer": "Key of Cancer",
+  "item.fairytail.key_virgo": "Key of Virgo",
+  "item.fairytail.key_sagittarius": "Key of Sagittarius",
+  "item.fairytail.key_leo": "Key of Leo",
+  "item.fairytail.key_aries": "Key of Aries",
+  "item.fairytail.key_gemini": "Key of Gemini",
+  "item.fairytail.key_scorpio": "Key of Scorpio",
+  "item.fairytail.key_capricorn": "Key of Capricorn",
+  "item.fairytail.key_pisces": "Key of Pisces",
+  "item.fairytail.key_libra": "Key of Libra",
+  "subtitles.fairytail.key_jingle": "Key jingles",
+  "subtitles.fairytail.resonance_rise": "Celestial resonance rises",
+  "subtitles.fairytail.energy_buildup": "Celestial energy builds",
+  "subtitles.fairytail.gate_open": "Celestial gate opens",
+  "subtitles.fairytail.shimmer_decay": "Magic shimmers"
+}

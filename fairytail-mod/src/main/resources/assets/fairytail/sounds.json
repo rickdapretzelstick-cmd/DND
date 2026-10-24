@@ -1,0 +1,32 @@
+{
+ "key_jingle": {
+  "sounds": [
+   "fairytail:key_jingle"
+  ],
+  "subtitle": "subtitles.fairytail.key_jingle"
+ },
+ "resonance_rise": {
+  "sounds": [
+   "fairytail:resonance_rise"
+  ],
+  "subtitle": "subtitles.fairytail.resonance_rise"
+ },
+ "energy_buildup": {
+  "sounds": [
+   "fairytail:energy_buildup"
+  ],
+  "subtitle": "subtitles.fairytail.energy_buildup"
+ },
+ "gate_open": {
+  "sounds": [
+   "fairytail:gate_open"
+  ],
+  "subtitle": "subtitles.fairytail.gate_open"
+ },
+ "shimmer_decay": {
+  "sounds": [
+   "fairytail:shimmer_decay"
+  ],
+  "subtitle": "subtitles.fairytail.shimmer_decay"
+ }
+}
