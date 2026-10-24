@@ -20,11 +20,15 @@ public final class CastTimeline {
     public static final float PREP_END = 16;
     public static final float RAISE = 30;
     public static final float DRAW_BACK = 44;
+    /** arm is fully extended and the key is "in the lock" */
     public static final float THRUST = 50;
-    public static final float TURN_END = 58;
+    /** the key starts turning, then the turn completes, and only THEN the gate activates */
+    public static final float TURN_START = 52;
+    public static final float TURN_END = 61;
     public static final float IMPACT = 62;
-    public static final float HOLD_END = 72;
-    public static final float RELEASE = 84;
+    /** arm stays held out, key inside the circle, until here */
+    public static final float HOLD_END = 80;
+    public static final float RELEASE = 86;
 
     // sound cues
     public static final int CUE_KEY_JINGLE = 3;
@@ -32,6 +36,8 @@ public final class CastTimeline {
     public static final int CUE_BUILDUP = 38;
     public static final int CUE_GATE = (int) IMPACT;
     public static final int CUE_SHIMMER = 66;
+    public static final int CUE_CLICK_A = 55;
+    public static final int CUE_CLICK_B = 60;
 
     public static float smooth(float a, float b, float t) {
         float k = Math.max(0, Math.min(1, (t - a) / (b - a)));
@@ -51,8 +57,8 @@ public final class CastTimeline {
     /** Full-screen golden flash intensity: a small pulse on the key turn, a full white-out at the impact. */
     public static float flash(float t) {
         float f = 0;
-        if (t >= THRUST + 2 && t < IMPACT - 1) f = 0.28f * (1 - smooth(THRUST + 2, THRUST + 9, t));
-        if (t >= IMPACT - 1) f = Math.max(f, 1 - smooth(IMPACT, IMPACT + 12, t));
+        if (t >= TURN_END - 1 && t < IMPACT - 1) f = 0.2f * smooth(TURN_END - 1, IMPACT - 1, t);
+        if (t >= IMPACT - 1) f = Math.max(f, 1 - smooth(IMPACT, IMPACT + 9, t));
         return f;
     }
 

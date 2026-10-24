@@ -527,7 +527,7 @@ def glyph_tex(cp, n=256):
     d.text(((n - (bb[2] - bb[0])) / 2 - bb[0], (n - (bb[3] - bb[1])) / 2 - bb[1]), ch, font=font, fill=255)
     core = img.filter(ImageFilter.MaxFilter(3))
     halo = img.filter(ImageFilter.GaussianBlur(n / 28))
-    a = np.clip(np.array(core, float) / 255 + np.array(halo, float) / 255 * 0.7, 0, 1)
+    a = np.clip(np.array(core, float) / 255 + np.array(halo, float) / 255 * 0.22, 0, 1)
     arr = np.zeros((n, n, 4), np.uint8)
     arr[..., :3] = 255
     arr[..., 3] = (a * 255).astype(np.uint8)
@@ -590,6 +590,111 @@ def gate_ring_tex(n=512):
     return Image.fromarray(arr)
 
 
+def _finish(img, n):
+    img = img.resize((n, n), Image.LANCZOS)
+    halo = img.filter(ImageFilter.GaussianBlur(n / 120))
+    a = np.clip(np.array(img, float) / 255 + np.array(halo, float) / 255 * 0.6, 0, 1)
+    arr = np.zeros((n, n, 4), np.uint8)
+    arr[..., :3] = 255
+    arr[..., 3] = (a * 255).astype(np.uint8)
+    return Image.fromarray(arr)
+
+
+def gate_outer_tex(n=512):
+    """Outer ring shared by every key: all twelve zodiac signs on a tick-marked band."""
+    S = 2
+    big = n * S
+    img = Image.new("L", (big, big), 0)
+    d = ImageDraw.Draw(img)
+    c = big / 2
+
+    def circ(r, w):
+        d.ellipse([c - r, c - r, c + r, c + r], outline=255, width=int(w))
+
+    circ(c * 0.97, 6 * S); circ(c * 0.93, 2 * S); circ(c * 0.70, 3 * S); circ(c * 0.66, 1.5 * S)
+    for i in range(72):
+        a = math.radians(i * 5)
+        r0, r1 = c * (0.70 if i % 6 else 0.66), c * (0.745 if i % 6 else 0.78)
+        d.line([c + r0 * math.cos(a), c + r0 * math.sin(a), c + r1 * math.cos(a), c + r1 * math.sin(a)], fill=255, width=2 * S)
+    font = ImageFont.truetype(FONT, int(n * 0.105) * S)
+    for i in range(12):
+        a = math.radians(i * 30 - 90)
+        gx, gy = c + c * 0.815 * math.cos(a), c + c * 0.815 * math.sin(a)
+        tile = Image.new("L", (160 * S, 160 * S), 0)
+        td = ImageDraw.Draw(tile)
+        ch = chr(0x2648 + i)
+        bb = td.textbbox((0, 0), ch, font=font)
+        td.text(((160 * S - (bb[2] - bb[0])) / 2 - bb[0], (160 * S - (bb[3] - bb[1])) / 2 - bb[1]), ch, font=font, fill=255)
+        tile = tile.rotate(-(i * 30), resample=Image.BICUBIC)
+        img.paste(255, (int(gx - 80 * S), int(gy - 80 * S)), tile)
+    for i in range(24):
+        a = math.radians(i * 15 + 7.5)
+        sx, sy = c + c * 0.895 * math.cos(a), c + c * 0.895 * math.sin(a)
+        d.ellipse([sx - 3 * S, sy - 3 * S, sx + 3 * S, sy + 3 * S], fill=255)
+    return _finish(img, n)
+
+
+def gate_design_tex(n=512):
+    """The gate's inner circle, after the user-supplied anime frame: thick ring, band of rune marks, and a
+    disc split into dark wedges (aperture blades) around a bright centre. Used for ALL keys."""
+    S = 2
+    big = n * S
+    img = Image.new("L", (big, big), 0)
+    d = ImageDraw.Draw(img)
+    c = big / 2
+    rng = random.Random(77)
+
+    def pt(r, a):
+        return (c + r * math.cos(a), c + r * math.sin(a))
+
+    def circ(r, w, v=255):
+        d.ellipse([c - r, c - r, c + r, c + r], outline=v, width=int(w))
+
+    circ(c * 0.97, 12 * S); circ(c * 0.86, 3 * S); circ(c * 0.64, 4 * S)
+    for i in range(96):  # rune band: short bent strokes
+        a = math.radians(i * 3.75)
+        r0, r1 = c * rng.uniform(0.68, 0.72), c * rng.uniform(0.78, 0.84)
+        mid = pt((r0 + r1) / 2, a + rng.uniform(-0.03, 0.03))
+        d.line([pt(r0, a), mid, pt(r1, a + rng.uniform(-0.04, 0.04))], fill=255, width=3 * S)
+        if i % 3 == 0:
+            q = pt((r0 + r1) / 2, a + 0.02)
+            d.ellipse([q[0] - 3 * S, q[1] - 3 * S, q[0] + 3 * S, q[1] + 3 * S], fill=255)
+    d.ellipse([c - c * 0.58, c - c * 0.58, c + c * 0.58, c + c * 0.58], fill=80)  # translucent disc
+    for i in range(6):  # dark aperture blades cut out of it
+        a = math.radians(i * 60 + 10)
+        d.polygon([pt(c * 0.58, a - 0.34), pt(c * 0.58, a + 0.34), pt(c * 0.17, a + 0.12), pt(c * 0.17, a - 0.12)], fill=0)
+        d.line([pt(c * 0.58, a - 0.34), pt(c * 0.17, a - 0.12), pt(c * 0.17, a + 0.12), pt(c * 0.58, a + 0.34)], fill=255, width=3 * S)
+    circ(c * 0.17, 5 * S)
+    return _finish(img, n)
+
+
+def spikes_tex(n=512):
+    """Bold, curved, tapering light spikes radiating from the centre (burst layer)."""
+    S = 2
+    big = n * S
+    img = Image.new("L", (big, big), 0)
+    d = ImageDraw.Draw(img)
+    c = big / 2
+    for k in range(16):
+        base = math.radians(k * 22.5)
+        L = c * (0.98 if k % 2 == 0 else 0.7)
+        W = 0.16 if k % 2 == 0 else 0.11
+        left, right = [], []
+        for i in range(41):
+            u = i / 40
+            r = c * 0.12 + (L - c * 0.12) * u
+            bend = 0.35 * u * u * (1 if k % 4 < 2 else -1)
+            w = W * (1 - u) ** 0.8
+            left.append((c + r * math.cos(base + bend + w), c + r * math.sin(base + bend + w)))
+            right.append((c + r * math.cos(base + bend - w), c + r * math.sin(base + bend - w)))
+        d.polygon(left + right[::-1], fill=255)
+    img = img.filter(ImageFilter.GaussianBlur(big / 150)).resize((n, n), Image.LANCZOS)
+    out = np.zeros((n, n, 4), np.uint8)
+    out[..., :3] = 255
+    out[..., 3] = np.array(img)
+    return Image.fromarray(out)
+
+
 def rays_tex(n=512, count=36, seed=7):
     rng = random.Random(seed)
     y, x = np.mgrid[0:n, 0:n]
@@ -611,14 +716,27 @@ def rays_tex(n=512, count=36, seed=7):
     return Image.fromarray(arr)
 
 
+def premult(img):
+    """RenderType.eyes blends with (ONE, ONE): alpha is ignored, so effect textures store RGB * alpha."""
+    a = np.array(img).astype(np.float32)
+    al = a[..., 3:4] / 255.0
+    a[..., :3] *= al
+    a[..., 3] = 255
+    return Image.fromarray(a.astype(np.uint8))
+
+
 def make_textures():
     for name in KEYS:
         write_model(name)
         render_icon(name).save(out("textures", "item", f"icon_{name}.png"))
-        glyph_tex(KEYS[name][0]).save(out("textures", "gui", f"glyph_{name}.png"))
-    gate_ring_tex().save(out("textures", "effect", "gate_ring.png"))
-    rays_tex().save(out("textures", "effect", "rays.png"))
-    glow_tex(128).save(out("textures", "effect", "glow.png"))
+        premult(glyph_tex(KEYS[name][0])).save(out("textures", "gui", f"glyph_{name}.png"))
+    premult(gate_outer_tex()).save(out("textures", "effect", "gate_outer.png"))
+    premult(rays_tex()).save(out("textures", "effect", "rays.png"))
+    premult(glow_tex(128)).save(out("textures", "effect", "glow.png"))
+    premult(star_tex(128, sharp=3.0, glow=0.5)).save(out("textures", "effect", "flare.png"))
+    premult(gate_design_tex()).save(out("textures", "effect", "gate_design.png"))
+    premult(spikes_tex()).save(out("textures", "effect", "spikes.png"))
+    premult(spikes_tex()).save(out("textures", "effect", "spikes.png"))
     # particle sprites
     star_tex(32).save(out("textures", "particle", "sparkle.png"))
     star_tex(64, sharp=3.0, glow=0.5).save(out("textures", "particle", "flare.png"))

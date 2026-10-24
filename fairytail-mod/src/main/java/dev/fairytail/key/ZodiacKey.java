@@ -13,7 +13,7 @@ import java.util.Locale;
  * {@code epithet} is the descriptive name shown in tooltips.
  */
 public enum ZodiacKey {
-    AQUARIUS("Aquarius", "Water Bearer", "The Water Bearer", 0x2652, 0x46AFFF, ParticleTypes.FALLING_WATER, 1, 0.9),
+    AQUARIUS("Aquarius", "Water Bearer", "The Water Bearer", 0x2652, 0x46AFFF, ParticleTypes.UNDERWATER, 1, 0.9),
     TAURUS("Taurus", "Golden Bull", "The Golden Bull", 0x2649, 0xEB4B32, ParticleTypes.FLAME, 1, 1.0),
     CANCER("Cancer", "Crab", "The Giant Crab", 0x264B, 0xFF7D46, ParticleTypes.BUBBLE_POP, 2, 1.0),
     VIRGO("Virgo", "Maiden", "The Maiden", 0x264D, 0xFF96CD, ParticleTypes.CHERRY_LEAVES, 1, 0.8),
@@ -50,6 +50,24 @@ public enum ZodiacKey {
         this.flourish = flourish;
         this.orbiters = orbiters;
         this.swirlSpeed = swirlSpeed;
+    }
+
+    /**
+     * Base colour of the gate light: cyan/white, after the user-supplied anime frame of a zodiac gate
+     * (the user confirmed this look applies to all keys).
+     */
+    public int gateColor() {
+        return 0x6FE6FF;
+    }
+
+    /** Spin of the inner wedge/rune circle, rad/tick (positive = counter-clockwise from the viewer). UNVERIFIED. */
+    public double midSpin() {
+        return -0.07;
+    }
+
+    /** Spin of the outer ring of all twelve signs, opposite to the inner circle. UNVERIFIED. */
+    public double outerSpin() {
+        return 0.03;
     }
 
     /** "Open, Gate of the Water Bearer!" */

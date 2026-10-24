@@ -38,12 +38,17 @@ public final class CinematicOverlay {
         int W = g.guiWidth(), H = g.guiHeight();
 
         // vignette
-        int va = (int) (96 * w);
+        int va = (int) (110 * w);
         int edge = Math.max(24, H / 6);
         g.fillGradient(0, 0, W, edge, va << 24, 0);
         g.fillGradient(0, H - edge, W, H, 0, va << 24);
-        g.fillGradient(0, 0, edge, H, va << 24, 0);
-        g.fillGradient(W - edge, 0, W, H, 0, va << 24);
+        int side = Math.max(32, W / 7);
+        for (int x = 0; x < side; x += 2) { // fillGradient is vertical-only, so draw the side falloff in strips
+            float k = 1f - x / (float) side;
+            int a = (int) (va * 0.8f * k * k) << 24;
+            g.fill(x, 0, x + 2, H, a);
+            g.fill(W - x - 2, 0, W - x, H, a);
+        }
         // 3 s of golden bloom on the edges while energy builds
         float build = smooth(THRUST - 6, IMPACT, t) * (1 - smooth(IMPACT, IMPACT + 18, t));
         if (build > 0) {
@@ -115,9 +120,10 @@ public final class CinematicOverlay {
         ResourceLocation glyph = FairyTailMod.id("textures/gui/glyph_" + c.key.id + ".png");
         int size = (int) (Mth.lerp(k, 120, 84));
         RenderSystem.enableBlend();
-        RenderSystem.blendFunc(com.mojang.blaze3d.platform.GlStateManager.SourceFactor.SRC_ALPHA, com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE);
-        g.setColor(1f, 0.86f, 0.45f, alpha * 0.9f);
-        g.blit(glyph, W / 2 - size / 2, (int) y - size - 6, 0, 0, size, size, size, size);
+        RenderSystem.blendFunc(com.mojang.blaze3d.platform.GlStateManager.SourceFactor.ONE, com.mojang.blaze3d.platform.GlStateManager.DestFactor.ONE);
+        float ga = alpha * 0.4f; // glyph texture is premultiplied, so scale the colour for fade
+        g.setColor(1f * ga, 0.86f * ga, 0.45f * ga, 1f);
+        g.blit(glyph, W / 2 - size / 2, (int) (y + 4 * scale) - size / 2, 0, 0, size, size, size, size); // faint sign behind the name
         g.setColor(1f, 1f, 1f, 1f);
         RenderSystem.defaultBlendFunc();
 

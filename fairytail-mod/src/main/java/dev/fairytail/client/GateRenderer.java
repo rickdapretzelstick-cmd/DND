@@ -32,14 +32,18 @@ import static dev.fairytail.cast.CastTimeline.*;
  * the cast timeline, so other players see the same gate when they are near a caster.
  */
 public final class GateRenderer {
-    private static final ResourceLocation RING = tex("effect/gate_ring");
+    private static final ResourceLocation RING_OUTER = tex("effect/gate_outer");
     private static final ResourceLocation RAYS = tex("effect/rays");
+    private static final ResourceLocation DESIGN = tex("effect/gate_design");
+    private static final ResourceLocation SPIKES = tex("effect/spikes");
     private static final ResourceLocation GLOW = tex("effect/glow");
-    private static final ResourceLocation FLARE = tex("particle/flare");
+    private static final ResourceLocation FLARE = tex("effect/flare");
     private static final Map<ZodiacKey, ResourceLocation> GLYPHS = new EnumMap<>(ZodiacKey.class);
 
     static {
-        for (ZodiacKey k : ZodiacKey.values()) GLYPHS.put(k, tex("gui/glyph_" + k.id));
+        for (ZodiacKey k : ZodiacKey.values()) {
+            GLYPHS.put(k, tex("gui/glyph_" + k.id));
+        }
     }
 
     private static ResourceLocation tex(String p) {
@@ -47,7 +51,7 @@ public final class GateRenderer {
     }
 
     public static void render(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES || AutoTest.NO_FX) return;
         if (ClientCastManager.local() == null && !ClientCastManager.all().iterator().hasNext()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
@@ -60,7 +64,7 @@ public final class GateRenderer {
             Entity e = mc.level.getEntity(c.entityId);
             if (!(e instanceof AbstractClientPlayer p) || !c.hasAnchor) continue;
             float t = c.time(p, partial);
-            if (t < 4 || t > TOTAL - 6) continue;
+            if (t < 4 || t > TOTAL - 2) continue;
             draw(ps, buf, cam, c, p, t);
         }
         buf.endBatch();
@@ -68,70 +72,70 @@ public final class GateRenderer {
 
     private static void draw(PoseStack ps, MultiBufferSource.BufferSource buf, Camera cam, ClientCast c, AbstractClientPlayer p, float t) {
         Vec3 camPos = cam.getPosition();
-        Vec3 a = c.anchor.subtract(camPos);
-        Vec3 fwd = CastEffects.forward(c, p);
-        // plane basis for the gate: it faces the way the caster faces
-        Vector3f n = new Vector3f((float) fwd.x, (float) fwd.y, (float) fwd.z);
-        Vector3f gx = new Vector3f(n.z, 0, -n.x).normalize();
-        Vector3f gy = new Vector3f(0, 1, 0);
+        Vec3 a = c.anchor.subtract(camPos); // key tip = the keyhole
+        // The circle stands perpendicular to the key, ahead of its tip, so the key points into its centre
+        Vec3 out = c.axis.lengthSqr() < 1e-4 ? CastEffects.forward(c, p) : c.axis.scale(-1).normalize();
+        Vector3f n = new Vector3f((float) out.x, (float) out.y, (float) out.z);
+        Vector3f ref = Math.abs(n.y) > 0.9f ? new Vector3f(1, 0, 0) : new Vector3f(0, 1, 0);
+        Vector3f gx = new Vector3f(n).cross(ref).normalize();
+        Vector3f gy = new Vector3f(n).cross(gx).normalize();
         Vector3f left = new Vector3f(cam.getLeftVector());
         Vector3f up = new Vector3f(cam.getUpVector());
 
-        int accent = c.key.accent;
+        ZodiacKey key = c.key;
+        int gc = key.gateColor();
+        int accent = mix(gc, key.accent, 0.12f);
         Matrix4f m = ps.last().pose();
 
-        // key halo + 4-point flare, swelling as the invocation builds
+        // halo + flare at the keyhole, swelling as the invocation builds
         float build = smooth(6, IMPACT, t);
         float pulse = 0.88f + 0.12f * Mth.sin(t * 1.3f);
-        float halo = (0.16f + 0.5f * build) * pulse * (1 - smooth(IMPACT + 6, IMPACT + 22, t) * 0.6f);
-        float haloA = Math.min(1f, 0.25f + 0.75f * build);
-        quad(buf, GLOW, m, a, left, up, halo, 0, argb(haloA, 0xFFD060));
-        quad(buf, FLARE, m, a, left, up, halo * 1.5f, t * 0.04f, argb(haloA * 0.9f, 0xFFF4C0));
+        float halo = (0.09f + 0.26f * build) * pulse * (1 - smooth(IMPACT, IMPACT + 8, t) * 0.85f);
+        float near = Mth.clamp((float) a.length() / 3.5f, 0.12f, 1f); // the keyhole can be close to the lens
+        halo *= near;
+        float haloA = Math.min(0.8f, 0.2f + 0.6f * build) * (0.4f + 0.6f * near);
+        quad(buf, GLOW, m, a, left, up, halo, 0, argb(haloA, gc));
+        quad(buf, FLARE, m, a, left, up, halo * 1.5f, t * 0.04f, argb(haloA * 0.9f, mix(gc, 0xFFFFFF, 0.6f)));
 
-        // key turn pulse
-        if (t >= THRUST + 2 && t < IMPACT) {
-            float k = (t - THRUST - 2) / (IMPACT - THRUST - 2);
-            quad(buf, FLARE, m, a, left, up, 0.4f + 0.9f * k, t * 0.2f, argb(0.5f + 0.5f * k, 0xFFFFFF));
+        // the turn of the key: a spark ratchets round the tip while it turns
+        if (t >= TURN_START && t < IMPACT) {
+            float k = (t - TURN_START) / (IMPACT - TURN_START);
+            quad(buf, FLARE, m, a, left, up, (0.15f + 0.4f * k) * near, t * 0.35f, argb(0.3f + 0.4f * k, 0xFFFFFF));
         }
 
-        // gate ring
-        if (t >= THRUST - 2 && t < TOTAL - 8) {
-            Vec3 center = a.add(fwd.scale(0.1));
+        // the gate: outer ring of 12 signs, the key's own circle, optional counter-rotating twin layer
+        if (t >= THRUST - 4 && t < TOTAL - 3) {
+            Vec3 center = a.add(out.scale(0.12));
             float radius, alpha;
             if (t < IMPACT) {
-                float k = smooth(THRUST - 2, IMPACT, t);
-                radius = 0.18f + 0.32f * k;
-                alpha = 0.15f + 0.65f * k;
+                float k = smooth(THRUST - 4, IMPACT, t);   // keyhole circle grows while the key turns
+                radius = 0.16f + 0.3f * k;
+                alpha = 0.2f + 0.6f * k;
             } else {
                 float k = Ease.OUT_EXPO.apply((t - IMPACT) / 11f);
-                radius = 0.5f + 2.25f * k + 0.35f * smooth(IMPACT + 11, HOLD_END + 8, t);
-                alpha = 1f - smooth(IMPACT + 8, TOTAL - 10, t);
+                radius = 0.46f + 1.0f * k + 0.1f * smooth(IMPACT + 11, HOLD_END, t);
+                alpha = 1f - smooth(HOLD_END, HOLD_END + 7, t);   // stays fully open for the whole hold
             }
-            float spin = t * 0.05f;
-            planeQuad(buf, RING, m, center, gx, gy, radius, spin, argb(alpha, 0xFFD770));
-            planeQuad(buf, RING, m, center.add(fwd.scale(0.03)), gx, gy, radius * 0.62f, -spin * 1.7f, argb(alpha * 0.8f, mix(0xFFEFB0, accent, 0.45f)));
-            planeQuad(buf, GLYPHS.get(c.key), m, center.add(fwd.scale(0.05)), gx, gy, radius * 0.3f, 0, argb(alpha * (0.7f + 0.3f * Mth.sin(t * 0.5f)), 0xFFFFFF));
+            float mid = (float) (key.midSpin() * t), outer = (float) (key.outerSpin() * t);
+            Vec3 c0 = center;
+            planeQuad(buf, RING_OUTER, m, c0, gx, gy, radius, outer, argb(alpha, gc));
+            planeQuad(buf, DESIGN, m, c0.add(out.scale(0.02)), gx, gy, radius * 0.74f, mid, argb(alpha, mix(gc, 0xFFFFFF, 0.35f)));
+            planeQuad(buf, GLYPHS.get(key), m, c0.add(out.scale(0.05)), gx, gy, radius * 0.22f, 0, argb(alpha * (0.35f + 0.15f * Mth.sin(t * 0.5f)), mix(0xFFFFFF, accent, 0.35f)));
 
-            if (t >= IMPACT) { // shock ring + counter ring
+            if (t >= IMPACT) { // shock ring
                 float sk = Ease.OUT_EXPO.apply((t - IMPACT) / 9f);
                 float sa = 1f - smooth(IMPACT, IMPACT + 12, t);
-                planeQuad(buf, RING, m, center.add(fwd.scale(-0.04)), gx, gy, 0.5f + 4.4f * sk, -spin * 0.6f, argb(sa * 0.85f, 0xFFFFFF));
+                planeQuad(buf, RING_OUTER, m, c0.add(out.scale(-0.04)), gx, gy, 0.5f + 2.6f * sk, -outer * 0.6f, argb(sa * 0.7f, 0xFFFFFF));
             }
         }
 
         // rays at the moment of opening
-        if (t >= IMPACT - 3 && t < IMPACT + 16) {
+        if (t >= IMPACT - 3 && t < IMPACT + 9) {
             float k = Ease.OUT_EXPO.apply(Mth.clamp((t - IMPACT + 3) / 12f, 0, 1));
-            float ra = (1f - smooth(IMPACT + 2, IMPACT + 16, t)) * Math.min(1f, (t - IMPACT + 3) / 2f);
-            quad(buf, RAYS, m, a, left, up, 0.4f + 3.6f * k, t * 0.03f, argb(ra, 0xFFE9A0));
-            quad(buf, RAYS, m, a, left, up, 0.3f + 2.3f * k, -t * 0.05f, argb(ra * 0.8f, 0xFFFFFF));
-        }
-
-        // the key's sign blooms outward after the opening
-        if (t >= IMPACT && t < IMPACT + 22) {
-            float k = (t - IMPACT) / 22f;
-            float s = 0.5f + 1.0f * Ease.OUT_CUBIC.apply(k);
-            quad(buf, GLYPHS.get(c.key), m, a, left, up, s, 0, argb((1f - k) * 0.8f, mix(0xFFFFFF, accent, 0.3f)));
+            float ra = (1f - smooth(IMPACT + 1, IMPACT + 9, t)) * Math.min(1f, (t - IMPACT + 3) / 2f);
+            // bold curved light spikes bursting from the gate, as in the reference frame
+            planeQuad(buf, SPIKES, m, a.add(out.scale(0.1)), gx, gy, 0.4f + 2.0f * k, t * 0.025f, argb(ra * 0.5f, gc));
+            planeQuad(buf, SPIKES, m, a.add(out.scale(0.12)), gx, gy, 0.3f + 1.6f * k, -t * 0.04f + 0.4f, argb(ra * 0.35f, 0xFFFFFF));
         }
     }
 

@@ -25,35 +25,36 @@ import static dev.fairytail.cast.CastTimeline.*;
  * shimmer, and the zodiac-specific flourish particle on top.
  */
 public final class CastEffects {
-    private static final int GOLD = 0xFFD75E;
-    private static final int PALE = 0xFFF3B8;
     private static final int WHITE = 0xFFFFFF;
 
     public static void tick(ClientCast c, AbstractClientPlayer p, int tick) {
         if (!(p.level() instanceof ClientLevel level)) return;
         RandomSource rng = level.random;
         ZodiacKey key = c.key;
+        final int GOLD = key.gateColor();                 // cyan gate light
+        final int PALE = mix(GOLD, 0xFFFFFF, 0.65f);
         Vec3 a = anchor(c, p);
         Vec3 axis = c.axis.lengthSqr() < 1e-4 ? new Vec3(0, 1, 0) : c.axis.normalize();
-        int accent = mix(GOLD, key.accent, 0.55f);
+        int accent = mix(GOLD, key.accent, 0.12f);
 
         sounds(level, a, tick, c);
+        if (dev.fairytail.client.AutoTest.NO_FX) return;
 
         // (4) trails: a short fading streak laid along the path the key head travelled since last tick
-        if (tick >= 4 && tick <= 84) {
+        if (tick >= 4 && tick <= HOLD_END + 6) {
             Vec3 prev = c.hasAnchor ? c.prevAnchor : a;
             double speed = a.distanceTo(prev);
             int n = 2 + (int) Math.min(6, speed * 40);
             for (int i = 0; i < n; i++) {
                 Vec3 q = prev.lerp(a, (i + rng.nextFloat()) / n);
-                Fx.mote(level, q.x, q.y, q.z, rnd(rng, 0.004), rnd(rng, 0.004) + 0.003, rnd(rng, 0.004), i % 3 == 0 ? WHITE : GOLD, 0.11f + (float) speed, 7 + rng.nextInt(5));
+                Fx.mote(level, q.x, q.y, q.z, rnd(rng, 0.004), rnd(rng, 0.004) + 0.003, rnd(rng, 0.004), i % 3 == 0 ? WHITE : GOLD, 0.045f + (float) speed * 0.5f, 7 + rng.nextInt(5));
             }
         }
 
         // (1) shimmer: the key catching the light
         if (tick == 9 || tick == 13) {
-            Fx.flare(level, a.x, a.y, a.z, PALE, 0.55f, 6);
-            for (int i = 0; i < 6; i++) Fx.sparkle(level, a.x + rnd(rng, 0.12), a.y + rnd(rng, 0.12), a.z + rnd(rng, 0.12), rnd(rng, 0.02), 0.01 + rng.nextFloat() * 0.02, rnd(rng, 0.02), PALE, 0.13f, 14);
+            Fx.flare(level, a.x, a.y, a.z, PALE, 0.28f, 6);
+            for (int i = 0; i < 6; i++) Fx.sparkle(level, a.x + rnd(rng, 0.12), a.y + rnd(rng, 0.12), a.z + rnd(rng, 0.12), rnd(rng, 0.02), 0.01 + rng.nextFloat() * 0.02, rnd(rng, 0.02), PALE, 0.06f, 14);
         }
 
         // (2) gathering energy: motes spawn on a shrinking shell and fly inward to the key head
@@ -66,7 +67,7 @@ public final class CastEffects {
                 Vec3 o = a.add(dir.scale(r));
                 int life = 10 + rng.nextInt(5);
                 Vec3 v = a.subtract(o).scale(1.0 / life);
-                Fx.streak(level, o.x, o.y, o.z, v.x, v.y, v.z, rng.nextInt(4) == 0 ? accent : GOLD, 0.12f + prog * 0.08f, life);
+                Fx.streak(level, o.x, o.y, o.z, v.x, v.y, v.z, rng.nextInt(4) == 0 ? accent : GOLD, 0.05f + prog * 0.035f, life);
             }
         }
 
@@ -81,33 +82,33 @@ public final class CastEffects {
                 double ang = base * (k == 0 ? 1 : -1.3) + k * Math.PI;
                 Vec3 off = u.scale(Math.cos(ang) * radius).add(v.scale(Math.sin(ang) * radius)).add(axis.scale(Math.sin(ang * 0.5) * 0.18));
                 Vec3 q = a.add(off);
-                Fx.sparkle(level, q.x, q.y, q.z, 0, 0.004, 0, k == 0 ? GOLD : accent, 0.17f, 9);
+                Fx.sparkle(level, q.x, q.y, q.z, 0, 0.004, 0, k == 0 ? GOLD : accent, 0.07f, 9);
             }
         }
 
         // flourish: the zodiac's own element
-        if (tick >= 24 && tick < IMPACT && tick % 2 == 0) {
+        if (tick >= 26 && tick < IMPACT && tick % 5 == 0) {
             level.addParticle(key.flourish, a.x + rnd(rng, 0.35), a.y + rnd(rng, 0.25), a.z + rnd(rng, 0.35), rnd(rng, 0.01), 0.01, rnd(rng, 0.01));
         }
 
         // key turn: a small pulse
-        if (tick == (int) THRUST + 4) {
-            Fx.flare(level, a.x, a.y, a.z, GOLD, 1.1f, 8);
-            ring(level, rng, a, axis, 14, 0.12, 0.05, accent, 0.14f);
+        if (tick == (int) TURN_END) {
+            Fx.flare(level, a.x, a.y, a.z, GOLD, 0.5f, 8);
+            ring(level, rng, a, axis, 14, 0.10, 0.04, accent, 0.07f);
         }
 
         // (5) impact: the gate opens
         if (tick == (int) IMPACT) {
-            Fx.flare(level, a.x, a.y, a.z, WHITE, 4.2f, 10);
-            Fx.flare(level, a.x, a.y, a.z, GOLD, 6.5f, 14);
+            Fx.flare(level, a.x, a.y, a.z, WHITE, 0.9f, 8);
+            Fx.flare(level, a.x, a.y, a.z, GOLD, 1.5f, 12);
             Vec3 fwd = forward(c, p);
-            ring(level, rng, a, fwd, 72, 0.22, 0.015, GOLD, 0.2f);
-            ring(level, rng, a, fwd, 36, 0.14, 0.01, WHITE, 0.16f);
-            ring(level, rng, a, fwd, 30, 0.30, 0.02, accent, 0.18f);
+            ring(level, rng, a, fwd, 72, 0.22, 0.015, GOLD, 0.09f);
+            ring(level, rng, a, fwd, 36, 0.14, 0.01, WHITE, 0.07f);
+            ring(level, rng, a, fwd, 30, 0.30, 0.02, accent, 0.08f);
             for (int i = 0; i < 70; i++) {
                 Vec3 d = randomDir(rng);
                 double sp = 0.05 + rng.nextFloat() * 0.22;
-                Fx.sparkle(level, a.x, a.y, a.z, d.x * sp, d.y * sp + 0.02, d.z * sp, rng.nextInt(3) == 0 ? WHITE : GOLD, 0.16f + rng.nextFloat() * 0.18f, 20 + rng.nextInt(14));
+                Fx.sparkle(level, a.x, a.y, a.z, d.x * sp, d.y * sp + 0.02, d.z * sp, rng.nextInt(3) == 0 ? WHITE : GOLD, 0.07f + rng.nextFloat() * 0.08f, 20 + rng.nextInt(14));
             }
             for (int i = 0; i < 24; i++) {
                 Vec3 d = randomDir(rng);
@@ -116,15 +117,15 @@ public final class CastEffects {
         }
 
         // (6) lingering shimmer after the gate has opened
-        if (tick > IMPACT && tick <= 84) {
-            float fade = 1f - (tick - IMPACT) / 24f;
+        if (tick > IMPACT && tick <= HOLD_END + 4) {
+            float fade = 1f - (tick - IMPACT) / (HOLD_END + 6 - IMPACT);
             int n = (int) Math.max(1, 7 * fade);
             Vec3 fwd = forward(c, p);
             for (int i = 0; i < n; i++) {
                 Vec3 d = randomDir(rng);
                 double r = 0.4 + rng.nextFloat() * 1.8 * (1 - 0.5 * (1 - fade));
                 Vec3 o = a.add(d.scale(r)).add(fwd.scale(0.15));
-                Fx.drift(level, o.x, o.y, o.z, rnd(rng, 0.01), 0.012 + rng.nextFloat() * 0.015, rnd(rng, 0.01), rng.nextInt(3) == 0 ? WHITE : GOLD, 0.12f + rng.nextFloat() * 0.12f, 22 + rng.nextInt(16), -0.1f);
+                Fx.drift(level, o.x, o.y, o.z, rnd(rng, 0.01), 0.012 + rng.nextFloat() * 0.015, rnd(rng, 0.01), rng.nextInt(3) == 0 ? WHITE : GOLD, 0.05f + rng.nextFloat() * 0.05f, 22 + rng.nextInt(16), -0.1f);
             }
         }
     }
@@ -134,7 +135,9 @@ public final class CastEffects {
         if (tick == CUE_KEY_JINGLE) play(level, a, ModSounds.KEY_JINGLE.get(), 0.9f * vol, 1.0f);
         if (tick == CUE_RESONANCE) play(level, a, ModSounds.RESONANCE_RISE.get(), 0.75f * vol, 1.0f);
         if (tick == CUE_BUILDUP) play(level, a, ModSounds.ENERGY_BUILDUP.get(), 0.8f * vol, 1.0f);
-        if (tick == (int) THRUST + 1) play(level, a, ModSounds.KEY_JINGLE.get(), 0.7f * vol, 1.35f);
+        if (tick == (int) THRUST) play(level, a, ModSounds.KEY_JINGLE.get(), 0.6f * vol, 1.2f);   // key slides into the lock
+        if (tick == CUE_CLICK_A) play(level, a, ModSounds.KEY_JINGLE.get(), 0.5f * vol, 1.7f);    // tumblers turning
+        if (tick == CUE_CLICK_B) play(level, a, ModSounds.KEY_JINGLE.get(), 0.7f * vol, 1.9f);
         if (tick == CUE_GATE) play(level, a, ModSounds.GATE_OPEN.get(), 1.25f * vol, 1.0f);
         if (tick == CUE_SHIMMER) play(level, a, ModSounds.SHIMMER_DECAY.get(), 0.9f * vol, 1.0f);
     }

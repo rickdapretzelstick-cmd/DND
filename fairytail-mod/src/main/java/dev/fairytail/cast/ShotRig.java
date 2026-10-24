@@ -14,25 +14,28 @@ public final class ShotRig {
             .to(RAISE, 2.45, Ease.IN_OUT_SINE)            // shot 2: slow dolly-in, medium close-up
             .to(DRAW_BACK, 2.25, Ease.IN_OUT_SINE)
             .to(DRAW_BACK + 3, 2.38, Ease.OUT_QUAD)       // tiny pull-back: anticipation
-            .to(THRUST + 6, 1.72, Ease.IN_OUT_CUBIC)      // shot 3: push toward the outstretched arm
-            .to(IMPACT, 1.52, Ease.LINEAR)
-            .to(IMPACT + 3, 2.9, Ease.OUT_EXPO)           // shot 4: punch out as the gate opens
-            .to(RELEASE, 3.5, Ease.OUT_CUBIC).build();
+            .to(THRUST + 6, 2.35, Ease.IN_OUT_CUBIC)      // shot 3: push toward the outstretched arm
+            .to(IMPACT, 2.15, Ease.LINEAR)
+            .to(IMPACT + 3, 3.0, Ease.OUT_EXPO)           // shot 4: punch out as the gate opens
+            .to(HOLD_END, 2.6, Ease.IN_OUT_SINE)          // hold: close enough to read arm, key and circle
+            .to(RELEASE + 4, 3.4, Ease.IN_OUT_CUBIC).build();
     public static final Track CAM_R = Track.at(0.75f)
             .to(PREP_END, 0.75, Ease.IN_OUT_CUBIC)
             .to(DRAW_BACK, 0.55, Ease.IN_OUT_SINE)
-            .to(THRUST + 6, 0.95, Ease.IN_OUT_CUBIC)
-            .to(IMPACT, 0.88, Ease.LINEAR)
-            .to(IMPACT + 3, 0.30, Ease.OUT_EXPO)
-            .to(RELEASE, 0.55, Ease.OUT_CUBIC).build();
+            .to(THRUST + 6, 1.15, Ease.IN_OUT_CUBIC)
+            .to(IMPACT, 1.05, Ease.LINEAR)
+            .to(IMPACT + 3, 0.55, Ease.OUT_EXPO)
+            .to(HOLD_END, 0.7, Ease.IN_OUT_SINE)
+            .to(RELEASE + 4, 0.55, Ease.IN_OUT_CUBIC).build();
     public static final Track CAM_U = Track.at(0.15f)
             .to(PREP_END, 0.18, Ease.IN_OUT_CUBIC)
             .to(RAISE, 0.26, Ease.IN_OUT_SINE)
             .to(DRAW_BACK, 0.30, Ease.IN_OUT_SINE)
             .to(THRUST + 6, -0.10, Ease.IN_OUT_CUBIC)     // low angle on the thrust
             .to(IMPACT, -0.04, Ease.LINEAR)
-            .to(IMPACT + 3, 0.22, Ease.OUT_EXPO)
-            .to(RELEASE, 0.42, Ease.OUT_CUBIC).build();
+            .to(IMPACT + 3, 0.2, Ease.OUT_EXPO)
+            .to(HOLD_END, 0.25, Ease.IN_OUT_SINE)
+            .to(RELEASE + 4, 0.42, Ease.IN_OUT_CUBIC).build();
 
     // look-at target (face-level) before blending toward the key
     public static final Track TGT_U = Track.at(0.22f)
@@ -54,8 +57,9 @@ public final class ShotRig {
             .to(DRAW_BACK, 48, Ease.IN_OUT_SINE)
             .to(THRUST + 6, 36, Ease.IN_OUT_CUBIC)
             .to(IMPACT, 33, Ease.LINEAR)
-            .to(IMPACT + 3, 82, Ease.OUT_EXPO)
-            .to(RELEASE, 60, Ease.OUT_CUBIC).build();
+            .to(IMPACT + 3, 68, Ease.OUT_EXPO)
+            .to(HOLD_END, 55, Ease.IN_OUT_SINE)
+            .to(RELEASE + 4, 60, Ease.IN_OUT_CUBIC).build();
     /** Dutch tilt in degrees */
     public static final Track ROLL = Track.at(0)
             .to(PREP_END, -1.5, Ease.IN_OUT_SINE)

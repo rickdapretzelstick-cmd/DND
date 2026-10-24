@@ -22,11 +22,11 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
-import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.Map;
@@ -48,13 +48,13 @@ public class FairyTailClient {
             AutoTest.tick();
         });
         bus.addListener(RenderLevelStageEvent.class, GateRenderer::render);
+        bus.addListener(RenderFrameEvent.Post.class, e -> AutoTest.frame());
         bus.addListener(ViewportEvent.ComputeFov.class, e -> e.setFOV(CinematicCamera.fov(e.getFOV(), (float) e.getPartialTick())));
         bus.addListener(RenderHandEvent.class, e -> {
             if (CinematicCamera.active()) e.setCanceled(true);
         });
         bus.addListener(RenderGuiLayerEvent.Pre.class, e -> {
-            if (CinematicCamera.active() && !CinematicOverlay.LAYER_ID.equals(e.getName())
-                    && !VanillaGuiLayers.CHAT.equals(e.getName())) {
+            if (CinematicCamera.active() && !CinematicOverlay.LAYER_ID.equals(e.getName())) {
                 e.setCanceled(true);
             }
         });

@@ -8,6 +8,7 @@ import dev.fairytail.cast.PoseTracks;
 import dev.fairytail.client.model.ElbowModel;
 import dev.fairytail.registry.ModItems;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -26,13 +27,15 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Draws the key during a cast, parented to the real forearm transform (so it follows the elbow, wrist
- * flex and twist exactly), and records the key head's world position for particles, camera and gate.
+ * flex and twist exactly), and records the key tip's world position for particles, camera and gate.
  */
 public class CastKeyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
     /** Key size in blocks at scale 1.0 (the model itself is 1 block tall). */
-    private static final float KEY_SCALE = 0.55f;
-    /** Distance (model px/16) from the fist to the emblem along the key axis: (13 - 6)/16. */
-    private static final float EMBLEM_OFFSET = 7f / 16f;
+    private static final float KEY_SCALE = 0.5f;
+    /** Model-space Y (in 1/16 block) of the grip, and of the bit's tip (the "keyhole" point). */
+    private static final float GRIP_Y = 14.2f;
+    private static final float TIP_Y = 0.4f;
+    private static final float TIP_OFFSET = (TIP_Y - GRIP_Y) / 16f;
 
     public CastKeyLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent) {
         super(parent);
@@ -55,27 +58,26 @@ public class CastKeyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<
         if (fore == null) return;
 
         float w = CastTimeline.poseWeight(t);
-        float shoulder = arm.xRot;
-        float elbowAngle = fore.xRot;
 
         ps.pushPose();
         arm.translateAndRotate(ps);
         fore.translateAndRotate(ps);
-        ps.translate(0f, 0.34f, 0f); // fist, about 5.5 px down the forearm
+        ps.translate(0f, 0.40f, 0f); // just past the end of the hand (6 px = 0.375), so the bow sits in the fingers, not inside the arm
 
-        // keep the key's world pitch independent of how the arm is folded, then tilt it forward by KEY_FLEX
-        float tilt = -PoseTracks.KEY_FLEX.eval(t);
-        ps.mulPose(Axis.XP.rotation(tilt - (shoulder + elbowAngle)));
+        // The key is rigid with the forearm: its bit (model -Y) points straight out of the fist along the
+        // forearm, whatever the arm is doing. Measured in-game: -90 deg about X turns the model's +Y (head)
+        // back toward the wrist, so -Y (the bit) leads out of the hand.
+        ps.mulPose(Axis.XP.rotation(-Mth.HALF_PI + PoseTracks.KEY_FLEX.eval(t)));
         ps.mulPose(Axis.XP.rotationDegrees(-90f));
         ps.mulPose(Axis.YP.rotationDegrees(180f));
         float side = c.leftArm ? -1f : 1f;
-        ps.mulPose(Axis.YP.rotation(PoseTracks.KEY_TWIST.eval(t) * side));
+        ps.mulPose(Axis.YP.rotation(PoseTracks.KEY_TWIST.eval(t) * side)); // turn of the key about its own axis
         float k = KEY_SCALE * PoseTracks.KEY_SCALE.eval(t);
         ps.scale(k, k, k);
 
         recordAnchor(c, ps);
 
-        ps.translate(0f, 0.125f, 0f); // model y=6 (the grip) sits at the fist
+        ps.translate(0f, (8f - GRIP_Y) / 16f, 0f); // the key is pinched by its bow: only the last ~2 px of the head is behind the fingers
         Minecraft mc = Minecraft.getInstance();
         BakedModel model = mc.getModelManager().getModel(handModel(c.key));
         if (model != mc.getModelManager().getMissingModel()) {
@@ -88,7 +90,7 @@ public class CastKeyLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<
 
     private static void recordAnchor(ClientCast c, PoseStack ps) {
         Matrix4f pose = ps.last().pose();
-        Vector3f head = pose.transformPosition(0f, EMBLEM_OFFSET, 0f, new Vector3f());
+        Vector3f head = pose.transformPosition(0f, TIP_OFFSET, 0f, new Vector3f());
         Vector3f axis = pose.transformDirection(0f, 1f, 0f, new Vector3f()).normalize();
         Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         c.setAnchor(new Vec3(cam.x + head.x, cam.y + head.y, cam.z + head.z), new Vec3(axis.x, axis.y, axis.z));

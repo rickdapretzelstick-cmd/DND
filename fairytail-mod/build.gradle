@@ -19,6 +19,11 @@ neoForge {
         client {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            // optional in-game autotest, e.g.  ./gradlew runClient -PftTest=aquarius -PftShots=8,40,62
+            ['ftTest': 'fairytail.autotest', 'ftShots': 'fairytail.shots', 'ftCamera': 'fairytail.camera', 'ftRepeat': 'fairytail.repeat', 'ftNoFx': 'fairytail.nofx'].each { prop, sys ->
+                if (project.hasProperty(prop)) systemProperty sys, project.property(prop)
+            }
+            if (project.hasProperty('ftConnect')) programArguments.addAll(['--quickPlayMultiplayer', project.property('ftConnect')])
         }
         server {
             server()
