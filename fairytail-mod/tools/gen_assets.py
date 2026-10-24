@@ -659,7 +659,7 @@ def gate_design_tex(n=512):
         if i % 3 == 0:
             q = pt((r0 + r1) / 2, a + 0.02)
             d.ellipse([q[0] - 3 * S, q[1] - 3 * S, q[0] + 3 * S, q[1] + 3 * S], fill=255)
-    d.ellipse([c - c * 0.58, c - c * 0.58, c + c * 0.58, c + c * 0.58], fill=80)  # translucent disc
+    d.ellipse([c - c * 0.58, c - c * 0.58, c + c * 0.58, c + c * 0.58], fill=38)  # translucent disc
     for i in range(6):  # dark aperture blades cut out of it
         a = math.radians(i * 60 + 10)
         d.polygon([pt(c * 0.58, a - 0.34), pt(c * 0.58, a + 0.34), pt(c * 0.17, a + 0.12), pt(c * 0.17, a - 0.12)], fill=0)

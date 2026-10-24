@@ -62,6 +62,7 @@ public final class AutoTest {
                         case "front" -> CameraType.THIRD_PERSON_FRONT;
                         default -> CameraType.FIRST_PERSON;
                     });
+                    if (Boolean.getBoolean("fairytail.left")) mc.options.mainHand().set(net.minecraft.world.entity.HumanoidArm.LEFT);
                     mc.player.connection.sendCommand("gamemode creative");
                     phase = Phase.GIVE;
                     wait = 0;

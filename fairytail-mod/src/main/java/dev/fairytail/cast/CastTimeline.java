@@ -58,7 +58,7 @@ public final class CastTimeline {
     public static float flash(float t) {
         float f = 0;
         if (t >= TURN_END - 1 && t < IMPACT - 1) f = 0.2f * smooth(TURN_END - 1, IMPACT - 1, t);
-        if (t >= IMPACT - 1) f = Math.max(f, 1 - smooth(IMPACT, IMPACT + 9, t));
+        if (t >= IMPACT - 1) f = Math.max(f, 0.7f * (1 - smooth(IMPACT, IMPACT + 7, t)));
         return f;
     }
 

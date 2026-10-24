@@ -119,8 +119,8 @@ public final class GateRenderer {
             float mid = (float) (key.midSpin() * t), outer = (float) (key.outerSpin() * t);
             Vec3 c0 = center;
             planeQuad(buf, RING_OUTER, m, c0, gx, gy, radius, outer, argb(alpha, gc));
-            planeQuad(buf, DESIGN, m, c0.add(out.scale(0.02)), gx, gy, radius * 0.74f, mid, argb(alpha, mix(gc, 0xFFFFFF, 0.35f)));
-            planeQuad(buf, GLYPHS.get(key), m, c0.add(out.scale(0.05)), gx, gy, radius * 0.22f, 0, argb(alpha * (0.35f + 0.15f * Mth.sin(t * 0.5f)), mix(0xFFFFFF, accent, 0.35f)));
+            planeQuad(buf, DESIGN, m, c0.add(out.scale(0.02)), gx, gy, radius * 0.74f, mid, argb(alpha * 0.8f, mix(gc, 0xFFFFFF, 0.35f)));
+            planeQuad(buf, GLYPHS.get(key), m, c0.add(out.scale(0.05)), gx, gy, radius * 0.16f, 0, argb(alpha * (0.2f + 0.08f * Mth.sin(t * 0.5f)), mix(0xFFFFFF, accent, 0.35f)));
 
             if (t >= IMPACT) { // shock ring
                 float sk = Ease.OUT_EXPO.apply((t - IMPACT) / 9f);

@@ -48,7 +48,7 @@ Output: `run/screenshots/`, log lines `[autotest] ... restored=true`.
 ## Verified vs not (honest status)
 Verified in this sandbox: builds a JAR; dedicated server boots with the mod; headless client (Mesa software
 GL) joins a dedicated server, casts through the real path, camera/pose/HUD restore (`restored=true`) in
-first-person and third-person-back starts; screenshots inspected for all stages on Aquarius.
+first-person, third-person-back and left-handed casts; screenshots inspected for all stages on Aquarius.
 **Not verified:** audio (no sound device here, sounds are synthesized but never heard), high/low FPS
 behaviour beyond the ~5 fps software renderer, real multiplayer with a second viewer, left-handed casts,
 slim-vs-classic skin comparison, armour/elytra interaction, other mods.
